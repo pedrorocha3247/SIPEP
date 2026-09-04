@@ -64,12 +64,10 @@
       <div class="status" id="rev-status">
         <input type="radio" name="status" id="st-aprovado" value="Aprovado">
         <label for="st-aprovado">Aprovado <b>1</b></label>
-        <input type="radio" name="status" id="st-ressalva" value="Aprovado com ressalva">
-        <label for="st-ressalva">Aprovado com ressalva <b>2</b></label>
-        <input type="radio" name="status" id="st-duvida" value="Em dúvida">
-        <label for="st-duvida">Em dúvida <b>3</b></label>
+        <input type="radio" name="status" id="st-aguardando" value="Aguardando esclarecimentos">
+        <label for="st-aguardando">Aguardando esclarecimentos <b>2</b></label>
         <input type="radio" name="status" id="st-recusado" value="Recusado">
-        <label for="st-recusado">Recusado <b>4</b></label>
+        <label for="st-recusado">Recusado <b>3</b></label>
       </div>
 
       <div class="campo">
@@ -102,23 +100,28 @@
           <button class="botao fantasma" id="btn-imprimir">Imprimir</button>
         </div>
         <div>
-          <button class="botao secundario" id="btn-json">Exportar dados (JSON)</button>
           <button class="botao primario" id="btn-planilha">Gerar planilha</button>
         </div>
       </div>
     </div>
 
     <div class="cartao">
-      <h2>Pareceres emitidos</h2>
+      <div class="cabecalho-recolhivel">
+        <h2>Pareceres emitidos <span class="sub" id="res-qtd"></span></h2>
+        <button class="botao fantasma" id="btn-lista" aria-expanded="false"
+                aria-controls="res-lista">Mostrar</button>
+      </div>
+      <div id="res-lista" hidden>
       <div class="lista-tipos" id="res-filtros"></div>
       <div class="rolagem">
         <table>
           <thead><tr>
             <th>S.N</th><th>Tipo</th><th class="num">Valor</th>
-            <th>Favorecido</th><th>Status</th><th>Parecer</th>
+            <th>Favorecido</th><th>Destinação</th><th>Status</th><th>Parecer</th>
           </tr></thead>
           <tbody id="res-corpo"></tbody>
         </table>
+      </div>
       </div>
     </div>
   </section>
