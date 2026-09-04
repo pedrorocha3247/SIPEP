@@ -92,7 +92,8 @@
   <section id="tela-resumo" class="oculto">
     <div class="cartao">
       <h2>Resumo da conferência <span class="sub" id="res-data"></span></h2>
-      <div class="pilulas" id="res-pilulas"></div>
+      <div class="resumo-totais" id="res-totais"></div>
+      <div class="resumo-status" id="res-status"></div>
       <div id="res-pendencia"></div>
       <div class="acoes">
         <div>
@@ -112,16 +113,8 @@
                 aria-controls="res-lista">Mostrar</button>
       </div>
       <div id="res-lista" hidden>
-      <div class="lista-tipos" id="res-filtros"></div>
-      <div class="rolagem">
-        <table>
-          <thead><tr>
-            <th>S.N</th><th>Tipo</th><th class="num">Valor</th>
-            <th>Favorecido</th><th>Destinação</th><th>Status</th><th>Parecer</th>
-          </tr></thead>
-          <tbody id="res-corpo"></tbody>
-        </table>
-      </div>
+        <div class="lista-tipos" id="res-filtros"></div>
+        <div id="res-corpo"></div>
       </div>
     </div>
   </section>
