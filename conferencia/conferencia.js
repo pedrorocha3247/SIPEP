@@ -12,14 +12,23 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 
 const ORDEM = ["TRANSFERÊNCIA", "TED", "DÉBITO EM CONTA", "PIX", "BOLETO"];
 const STATUS = [
-  { valor: "Aprovado",              id: "aprovado" },
-  { valor: "Aprovado com ressalva", id: "ressalva" },
-  { valor: "Em dúvida",             id: "duvida"   },
-  { valor: "Recusado",              id: "recusado" },
+  { valor: "Aprovado",                   id: "aprovado"   },
+  { valor: "Aguardando esclarecimentos", id: "aguardando" },
+  { valor: "Recusado",                   id: "recusado"   },
 ];
-/** Nomes usados antes, para não perder os pareceres já dados. */
-const STATUS_ANTIGOS = { Conforme: "Aprovado", Ressalva: "Aprovado com ressalva",
-                         Retido: "Em dúvida", Devolvido: "Recusado" };
+/**
+ * Nomes usados em versões anteriores, para não perder os pareceres já dados.
+ * "Aprovado com ressalva" virou "Aprovado" — a ressalva em si segue escrita
+ * no texto do parecer, que é onde ela sempre esteve.
+ */
+const STATUS_ANTIGOS = {
+  Conforme: "Aprovado",
+  Ressalva: "Aprovado",
+  "Aprovado com ressalva": "Aprovado",
+  Retido: "Aguardando esclarecimentos",
+  "Em dúvida": "Aguardando esclarecimentos",
+  Devolvido: "Recusado",
+};
 const idDoStatus = (v) => (STATUS.find((s) => s.valor === v) || {}).id || "";
 const CHAVE = "noctus.conferencia";
 const CHAVE_ANTIGA = "sipep.conferencia";
@@ -254,7 +263,7 @@ function ligarRevisao() {
   document.addEventListener("keydown", (e) => {
     if ($("tela-revisao").classList.contains("oculto")) return;
     const digitando = e.target.tagName === "TEXTAREA";
-    if (e.key >= "1" && e.key <= "4" && !digitando) {
+    if (+e.key >= 1 && +e.key <= STATUS.length && !digitando) {
       $("st-" + STATUS[+e.key - 1].id).checked = true; e.preventDefault();
     } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       $("btn-proxima").click(); e.preventDefault();
@@ -279,11 +288,12 @@ function mostrarResumo() {
     const st = estado.pareceres[s.sn]?.status;
     contagem[st in contagem ? st : "Sem conferir"]++;
   }
-  const classe = { Aprovado: "g", "Aprovado com ressalva": "a", "Em dúvida": "b",
+  const classe = { Aprovado: "g", "Aguardando esclarecimentos": "b",
                    Recusado: "v", "Sem conferir": "" };
   $("res-pilulas").innerHTML =
     `<div class="pilula"><b>${estado.itens.length}</b><span>Solicitações</span></div>
-     <div class="pilula"><b>${moeda(estado.dados.validacao.valorExtraido)}</b><span>Valor total R$</span></div>` +
+     <div class="pilula pilula--valor"><b>${moeda(estado.dados.validacao.valorExtraido)}</b>
+       <span>Valor total (R$)</span></div>` +
     Object.entries(contagem).filter(([, n]) => n)
       .map(([k, n]) => `<div class="pilula ${classe[k]}"><b>${n}</b><span>${k}</span></div>`).join("");
 
@@ -301,13 +311,15 @@ function mostrarResumo() {
   });
 
   const esc = (t) => String(t ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-  $("res-corpo").innerHTML = estado.itens
-    .filter((s) => !filtro || s.tipo === filtro)
+  const visiveis = estado.itens.filter((s) => !filtro || s.tipo === filtro);
+  $("res-qtd").textContent =
+    `· ${visiveis.length}${filtro ? " em " + filtro : ""}`;
+  $("res-corpo").innerHTML = visiveis
     .map((s) => {
       const p = estado.pareceres[s.sn] || {};
       return `<tr class="${p.status ? "" : "pendente"}">
         <td>${s.sn}</td><td>${s.tipo}</td><td class="num">${moeda(s.valor)}</td>
-        <td>${esc(s.favorecido)}</td>
+        <td>${esc(s.favorecido)}</td><td>${esc(s.destinacao)}</td>
         <td>${p.status ? `<span class="marca marca--${idDoStatus(p.status)}">${p.status}</span>` : "—"}</td>
         <td>${esc(p.parecer)}</td></tr>`;
     }).join("");
@@ -317,20 +329,12 @@ function ligarResumo() {
   $("btn-voltar").onclick = () => { irPara("revisao"); render(); };
   $("btn-imprimir").onclick = () => window.print();
   $("btn-planilha").onclick = gerarPlanilha;
-  $("btn-json").onclick = () => {
-    const blob = new Blob([JSON.stringify({
-      meta: estado.dados.meta, validacao: estado.dados.validacao,
-      solicitacoes: estado.dados.solicitacoes, pareceres: estado.pareceres,
-    }, null, 1)], { type: "application/json" });
-    baixar(blob, `conferencia_${(estado.dados.meta.dataInicio || "").replace(/\//g, "-")}.json`);
+  $("btn-lista").onclick = () => {
+    const lista = $("res-lista");
+    lista.hidden = !lista.hidden;
+    $("btn-lista").textContent = lista.hidden ? "Mostrar" : "Ocultar";
+    $("btn-lista").setAttribute("aria-expanded", String(!lista.hidden));
   };
-}
-
-function baixar(blob, nome) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = nome; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /* ---------------------------------------------------------------------- planilha */
