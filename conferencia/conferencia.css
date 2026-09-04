@@ -73,12 +73,12 @@ h2{font-size:.95rem;font-weight:700;margin:0 0 1rem;letter-spacing:-.01em}
 .status input:checked+label{border-color:transparent;color:#06130c;font-weight:600}
 .status input:checked+label b{color:rgba(6,19,12,.55)}
 .status input:focus-visible+label{outline:2px solid var(--color-blue);outline-offset:2px}
-#st-Conforme:checked+label{background:var(--color-green)}
-#st-Ressalva:checked+label{background:var(--color-warn)}
-#st-Retido:checked+label{background:var(--color-blue);color:#fff}
-#st-Retido:checked+label b{color:rgba(255,255,255,.6)}
-#st-Devolvido:checked+label{background:var(--color-error);color:#fff}
-#st-Devolvido:checked+label b{color:rgba(255,255,255,.6)}
+#st-aprovado:checked+label{background:var(--color-green)}
+#st-ressalva:checked+label{background:var(--color-warn)}
+#st-duvida:checked+label{background:var(--color-blue);color:#fff}
+#st-duvida:checked+label b{color:rgba(255,255,255,.6)}
+#st-recusado:checked+label{background:var(--color-error);color:#fff}
+#st-recusado:checked+label b{color:rgba(255,255,255,.6)}
 
 textarea{width:100%;min-height:82px;padding:.7rem .8rem;background:var(--color-surface-raised);
   border:1px solid var(--color-border);border-radius:var(--radius-md);color:var(--color-text);
@@ -120,15 +120,17 @@ td{border-top:1px solid var(--color-border);padding:.6rem .7rem;vertical-align:t
 td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 tr.pendente td{color:var(--color-text-muted)}
 .marca{display:inline-block;padding:.15rem .5rem;border-radius:999px;font-size:.7rem;font-weight:600}
-.marca.Conforme{background:var(--color-green-dim);color:var(--color-green-hover)}
-.marca.Ressalva{background:var(--color-warn-bg);color:var(--color-warn)}
-.marca.Retido{background:var(--color-blue-dim);color:var(--color-blue-hover)}
-.marca.Devolvido{background:var(--color-error-bg);color:var(--color-error)}
+.marca--aprovado{background:var(--color-green-dim);color:var(--color-green-hover)}
+.marca--ressalva{background:var(--color-warn-bg);color:var(--color-warn)}
+.marca--duvida{background:var(--color-blue-dim);color:var(--color-blue-hover)}
+.marca--recusado{background:var(--color-error-bg);color:var(--color-error)}
 
 /* conferências guardadas no navegador */
 .lote{display:flex;justify-content:space-between;align-items:center;gap:1rem;
   padding:.6rem .8rem;border:1px solid var(--color-border);
   border-radius:var(--radius-sm);margin-bottom:.5rem}
+.lote--completa{border-color:var(--color-green);background:var(--color-green-dim)}
+.lote--completa>span:first-child{color:var(--color-green-hover)}
 .lote--confirma{border-color:var(--color-error-border);background:var(--color-error-bg)}
 .lote__acoes{display:flex;align-items:center;gap:.5rem;flex-shrink:0}
 .lote__x{background:transparent;border:1px solid transparent;color:var(--color-text-muted);
