@@ -1,5 +1,5 @@
-/* Módulo de Conferência de Pagamentos — SIPEP
-   Reaproveita os tokens do design system do SIPEP. Se os valores mudarem lá,
+/* Módulo de Conferência de Pagamentos — NOCTUS
+   Reaproveita os tokens do design system do NOCTUS. Se os valores mudarem lá,
    troque só este bloco :root. */
 :root{
   --color-bg:#0a0c10; --color-surface:#12151c; --color-surface-raised:#181c25;
@@ -125,6 +125,19 @@ tr.pendente td{color:var(--color-text-muted)}
 .marca.Retido{background:var(--color-blue-dim);color:var(--color-blue-hover)}
 .marca.Devolvido{background:var(--color-error-bg);color:var(--color-error)}
 
+/* conferências guardadas no navegador */
+.lote{display:flex;justify-content:space-between;align-items:center;gap:1rem;
+  padding:.6rem .8rem;border:1px solid var(--color-border);
+  border-radius:var(--radius-sm);margin-bottom:.5rem}
+.lote--confirma{border-color:var(--color-error-border);background:var(--color-error-bg)}
+.lote__acoes{display:flex;align-items:center;gap:.5rem;flex-shrink:0}
+.lote__x{background:transparent;border:1px solid transparent;color:var(--color-text-muted);
+  border-radius:var(--radius-sm);width:1.9rem;height:1.9rem;flex-shrink:0;font-size:.85rem;
+  font-family:inherit;line-height:1;cursor:pointer;transition:all var(--transition-fast)}
+.lote__x:hover{color:var(--color-error);border-color:var(--color-error-border);
+  background:var(--color-error-bg)}
+.botao.perigo{background:var(--color-error);color:#fff}
+.botao.perigo:hover:not(:disabled){background:#ef6259}
 .lista-tipos{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1rem}
 .chip{background:var(--color-surface-raised);border:1px solid var(--color-border);
   border-radius:999px;padding:.35rem .8rem;font-size:.78rem;color:var(--color-text-secondary);cursor:pointer}
