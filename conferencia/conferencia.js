@@ -11,7 +11,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
   new URL("./vendor/pdf.worker.min.mjs", import.meta.url).href;
 
 const ORDEM = ["TRANSFERÊNCIA", "TED", "DÉBITO EM CONTA", "PIX", "BOLETO"];
-const STATUS = ["Conforme", "Ressalva", "Retido", "Devolvido"];
+const STATUS = [
+  { valor: "Aprovado",              id: "aprovado" },
+  { valor: "Aprovado com ressalva", id: "ressalva" },
+  { valor: "Em dúvida",             id: "duvida"   },
+  { valor: "Recusado",              id: "recusado" },
+];
+/** Nomes usados antes, para não perder os pareceres já dados. */
+const STATUS_ANTIGOS = { Conforme: "Aprovado", Ressalva: "Aprovado com ressalva",
+                         Retido: "Em dúvida", Devolvido: "Recusado" };
+const idDoStatus = (v) => (STATUS.find((s) => s.valor === v) || {}).id || "";
 const CHAVE = "noctus.conferencia";
 const CHAVE_ANTIGA = "sipep.conferencia";
 
@@ -46,7 +55,16 @@ function migrarChaves() {
       if (!localStorage.getItem(nova)) localStorage.setItem(nova, localStorage.getItem(antiga));
       localStorage.removeItem(antiga);
     }
-  } catch (e) { /* modo privado: segue sem migrar */ }
+    for (const chave of Object.keys(localStorage)) {
+      if (!chave.startsWith(CHAVE + ".")) continue;
+      const v = JSON.parse(localStorage.getItem(chave));
+      let mudou = false;
+      for (const p of Object.values(v.pareceres || {})) {
+        if (STATUS_ANTIGOS[p.status]) { p.status = STATUS_ANTIGOS[p.status]; mudou = true; }
+      }
+      if (mudou) localStorage.setItem(chave, JSON.stringify(v));
+    }
+  } catch (e) { /* modo privado ou entrada corrompida: segue sem migrar */ }
 }
 
 function lotesSalvos() {
@@ -125,7 +143,7 @@ function renderRetomar(confirmando) {
           <button class="botao perigo" data-acao="remover" data-chave="${l.chave}">Remover</button>
         </span>
       </div>` : `
-      <div class="lote">
+      <div class="lote${l.feitos === l.total ? " lote--completa" : ""}">
         <span>${l.meta?.dataInicio || "sem data"}
           <span class="sub">· ${l.feitos} de ${l.total} conferidas</span></span>
         <span class="lote__acoes">
@@ -178,11 +196,8 @@ async function processar(arquivo) {
 
 /* -------------------------------------------------------------------- conferência */
 function render() {
-  const { validacao, meta } = estado.dados;
-  $("aviso-extracao").innerHTML = validacao.confere
-    ? `<div class="alerta ok">Extração conferida: ${validacao.qtdExtraida} solicitações,
-        R$ ${moeda(validacao.valorExtraido)} — bate com os totais impressos no relatório
-        de ${meta.dataInicio}.</div>`
+  const { validacao } = estado.dados;
+  $("aviso-extracao").innerHTML = validacao.confere ? ""
     : `<div class="alerta erro"><b>Atenção:</b> o que extraí não bateu com os totais impressos
         (${validacao.qtdExtraida} × ${validacao.qtdRelatorio} solicitações,
         R$ ${moeda(validacao.valorExtraido)} × R$ ${moeda(validacao.valorRelatorio)}).
@@ -200,24 +215,18 @@ function render() {
   $("c-sn").textContent = s.sn;
   $("c-valor").textContent = "R$ " + moeda(s.valor);
   $("c-poder").textContent = s.poder || "—";
-  $("c-cnpj").textContent = s.cpfCnpj || "—";
   $("c-solicitante").textContent = s.solicitante || "—";
   $("c-competente").textContent = s.competente || "—";
-  $("c-favorecido").textContent = s.favorecido || "—";
+  $("c-favorecido").textContent =
+    [s.favorecido, s.cpfCnpj].filter(Boolean).join("  ·  ") || "—";
   $("c-destinacao").textContent = s.destinacao || "—";
-  $("c-banco").textContent = s.bancoDebitado || "—";
-  $("l-complemento").textContent =
-    s.tipo === "PIX" ? "Chave PIX"
-    : (s.tipo === "BOLETO" || s.tipo === "DÉBITO EM CONTA") ? "Observação"
-    : "Banco / agência / conta do favorecido";
-  $("c-complemento").textContent = s.complemento || "—";
 
   const p = estado.pareceres[s.sn] || {};
-  for (const st of STATUS) $("st-" + st).checked = p.status === st;
+  for (const st of STATUS) $("st-" + st.id).checked = p.status === st.valor;
   $("rev-parecer").value = p.parecer || "";
   $("btn-anterior").disabled = estado.i === 0;
   $("btn-proxima").textContent =
-    estado.i + 1 < total ? "Salvar e próxima →" : "Salvar e finalizar";
+    estado.i + 1 < total ? "Salvar e próxima" : "Salvar e finalizar";
 }
 
 function salvarAtual() {
@@ -246,7 +255,7 @@ function ligarRevisao() {
     if ($("tela-revisao").classList.contains("oculto")) return;
     const digitando = e.target.tagName === "TEXTAREA";
     if (e.key >= "1" && e.key <= "4" && !digitando) {
-      $("st-" + STATUS[+e.key - 1]).checked = true; e.preventDefault();
+      $("st-" + STATUS[+e.key - 1].id).checked = true; e.preventDefault();
     } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       $("btn-proxima").click(); e.preventDefault();
     } else if (e.key === "ArrowRight" && !digitando) {
@@ -264,20 +273,22 @@ function mostrarResumo() {
   irPara("resumo");
   $("res-data").textContent = "· " + (estado.dados.meta.dataInicio || "");
 
-  const contagem = { Conforme: 0, Ressalva: 0, Retido: 0, Devolvido: 0, Pendente: 0 };
+  const contagem = Object.fromEntries(STATUS.map((s) => [s.valor, 0]));
+  contagem["Sem conferir"] = 0;
   for (const s of estado.itens) {
     const st = estado.pareceres[s.sn]?.status;
-    contagem[st || "Pendente"]++;
+    contagem[st in contagem ? st : "Sem conferir"]++;
   }
-  const classe = { Conforme: "g", Ressalva: "a", Retido: "b", Devolvido: "v", Pendente: "" };
+  const classe = { Aprovado: "g", "Aprovado com ressalva": "a", "Em dúvida": "b",
+                   Recusado: "v", "Sem conferir": "" };
   $("res-pilulas").innerHTML =
     `<div class="pilula"><b>${estado.itens.length}</b><span>Solicitações</span></div>
      <div class="pilula"><b>${moeda(estado.dados.validacao.valorExtraido)}</b><span>Valor total R$</span></div>` +
     Object.entries(contagem).filter(([, n]) => n)
       .map(([k, n]) => `<div class="pilula ${classe[k]}"><b>${n}</b><span>${k}</span></div>`).join("");
 
-  $("res-pendencia").innerHTML = contagem.Pendente
-    ? `<div class="alerta">${contagem.Pendente} solicitação(ões) ainda sem status.</div>`
+  $("res-pendencia").innerHTML = contagem["Sem conferir"]
+    ? `<div class="alerta">${contagem["Sem conferir"]} solicitação(ões) ainda sem status.</div>`
     : `<div class="alerta ok">Todas as solicitações conferidas.</div>`;
 
   $("res-filtros").innerHTML =
@@ -297,7 +308,7 @@ function mostrarResumo() {
       return `<tr class="${p.status ? "" : "pendente"}">
         <td>${s.sn}</td><td>${s.tipo}</td><td class="num">${moeda(s.valor)}</td>
         <td>${esc(s.favorecido)}</td>
-        <td>${p.status ? `<span class="marca ${p.status}">${p.status}</span>` : "—"}</td>
+        <td>${p.status ? `<span class="marca marca--${idDoStatus(p.status)}">${p.status}</span>` : "—"}</td>
         <td>${esc(p.parecer)}</td></tr>`;
     }).join("");
 }
