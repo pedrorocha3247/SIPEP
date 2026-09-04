@@ -1,4 +1,4 @@
-# SIPEP
+# NOCTUS
 
 Sistema Integrado de Processos e Eficiencia Profissional.
 
