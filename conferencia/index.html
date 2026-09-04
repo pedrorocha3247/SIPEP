@@ -54,25 +54,22 @@
         <div class="campo"><label>S.N</label><div class="dado" id="c-sn">—</div></div>
         <div class="campo"><label>Valor</label><div class="dado numero" id="c-valor">—</div></div>
         <div class="campo"><label>Poder</label><div class="dado" id="c-poder">—</div></div>
-        <div class="campo"><label>CPF / CNPJ</label><div class="dado" id="c-cnpj">—</div></div>
         <div class="campo"><label>Solicitante</label><div class="dado" id="c-solicitante">—</div></div>
         <div class="campo"><label>Competente</label><div class="dado" id="c-competente">—</div></div>
-        <div class="campo largo"><label>Favorecido / Real favorecido</label><div class="dado" id="c-favorecido">—</div></div>
+        <div class="campo largo"><label>Favorecido · CPF / CNPJ</label><div class="dado" id="c-favorecido">—</div></div>
         <div class="campo largo"><label>Destinação</label><div class="dado" id="c-destinacao">—</div></div>
-        <div class="campo largo"><label id="l-complemento">Complemento</label><div class="dado" id="c-complemento">—</div></div>
-        <div class="campo largo"><label>Banco debitado</label><div class="dado" id="c-banco">—</div></div>
       </div>
 
       <label class="campo" style="display:block"><span style="display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-muted);margin-bottom:.4rem;font-weight:600">Status</span></label>
       <div class="status" id="rev-status">
-        <input type="radio" name="status" id="st-Conforme"  value="Conforme">
-        <label for="st-Conforme">Conforme <b>1</b></label>
-        <input type="radio" name="status" id="st-Ressalva"  value="Ressalva">
-        <label for="st-Ressalva">Ressalva <b>2</b></label>
-        <input type="radio" name="status" id="st-Retido"    value="Retido">
-        <label for="st-Retido">Retido <b>3</b></label>
-        <input type="radio" name="status" id="st-Devolvido" value="Devolvido">
-        <label for="st-Devolvido">Devolvido <b>4</b></label>
+        <input type="radio" name="status" id="st-aprovado" value="Aprovado">
+        <label for="st-aprovado">Aprovado <b>1</b></label>
+        <input type="radio" name="status" id="st-ressalva" value="Aprovado com ressalva">
+        <label for="st-ressalva">Aprovado com ressalva <b>2</b></label>
+        <input type="radio" name="status" id="st-duvida" value="Em dúvida">
+        <label for="st-duvida">Em dúvida <b>3</b></label>
+        <input type="radio" name="status" id="st-recusado" value="Recusado">
+        <label for="st-recusado">Recusado <b>4</b></label>
       </div>
 
       <div class="campo">
@@ -82,18 +79,14 @@
 
       <div class="acoes">
         <div>
-          <button class="botao fantasma" id="btn-anterior">← Anterior</button>
+          <button class="botao fantasma" id="btn-anterior">Anterior</button>
           <button class="botao fantasma" id="btn-pular">Pular</button>
         </div>
         <div>
           <button class="botao fantasma" id="btn-resumo">Ver resumo</button>
-          <button class="botao primario" id="btn-proxima">Salvar e próxima →</button>
+          <button class="botao primario" id="btn-proxima">Salvar e próxima</button>
         </div>
       </div>
-      <p class="sub" style="margin:.9rem 0 0;font-size:.78rem">
-        Atalhos: <kbd>1</kbd>–<kbd>4</kbd> status · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salvar e avançar ·
-        <kbd>←</kbd> <kbd>→</kbd> navegar
-      </p>
     </div>
   </section>
 
@@ -105,7 +98,7 @@
       <div id="res-pendencia"></div>
       <div class="acoes">
         <div>
-          <button class="botao fantasma" id="btn-voltar">← Continuar conferindo</button>
+          <button class="botao fantasma" id="btn-voltar">Continuar conferindo</button>
           <button class="botao fantasma" id="btn-imprimir">Imprimir</button>
         </div>
         <div>
