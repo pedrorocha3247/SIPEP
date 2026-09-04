@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conferência de Pagamentos — SIPEP</title>
+<meta name="description" content="Módulo de conferência do relatório de Solicitações de Pagamentos por Débito em Conta Corrente.">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./conferencia.css">
+</head>
+<body>
+
+<header class="topo">
+  <h1>Conferência de Pagamentos <span>· SIPEP</span></h1>
+  <nav>
+    <a href="../#/">← Voltar ao SIPEP</a>
+  </nav>
+</header>
+
+<main>
+
+  <!-- 1. upload -->
+  <section id="tela-upload" class="cartao">
+    <h2>Novo relatório</h2>
+    <p class="sub" style="margin-top:-.5rem;margin-bottom:1rem">
+      Relatório “Solicitações de Pagamentos por Débito em Conta Corrente” (SCK), em PDF.
+      O arquivo é lido aqui no seu navegador — nada é enviado para servidor nenhum.
+    </p>
+    <div class="solta" id="solta">
+      <strong>Clique para escolher o PDF</strong>
+      <span>ou arraste o arquivo para cá</span>
+      <input type="file" id="arquivo" accept="application/pdf" hidden>
+    </div>
+    <div id="upload-msg"></div>
+    <div id="retomar" class="oculto" style="margin-top:1rem"></div>
+  </section>
+
+  <!-- 2. conferência -->
+  <section id="tela-revisao" class="oculto">
+    <div id="aviso-extracao"></div>
+    <div class="cartao">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap">
+        <h2 style="margin:0" id="rev-tipo">—</h2>
+        <span class="sub" id="rev-contador">—</span>
+      </div>
+      <div class="progresso"><i id="rev-barra" style="width:0%"></i></div>
+
+      <div id="rev-alertas"></div>
+
+      <div class="grade">
+        <div class="campo"><label>S.N</label><div class="dado" id="c-sn">—</div></div>
+        <div class="campo"><label>Valor</label><div class="dado numero" id="c-valor">—</div></div>
+        <div class="campo"><label>Poder</label><div class="dado" id="c-poder">—</div></div>
+        <div class="campo"><label>CPF / CNPJ</label><div class="dado" id="c-cnpj">—</div></div>
+        <div class="campo"><label>Solicitante</label><div class="dado" id="c-solicitante">—</div></div>
+        <div class="campo"><label>Competente</label><div class="dado" id="c-competente">—</div></div>
+        <div class="campo largo"><label>Favorecido / Real favorecido</label><div class="dado" id="c-favorecido">—</div></div>
+        <div class="campo largo"><label>Destinação</label><div class="dado" id="c-destinacao">—</div></div>
+        <div class="campo largo"><label id="l-complemento">Complemento</label><div class="dado" id="c-complemento">—</div></div>
+        <div class="campo largo"><label>Banco debitado</label><div class="dado" id="c-banco">—</div></div>
+      </div>
+
+      <label class="campo" style="display:block"><span style="display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-muted);margin-bottom:.4rem;font-weight:600">Status</span></label>
+      <div class="status" id="rev-status">
+        <input type="radio" name="status" id="st-Conforme"  value="Conforme">
+        <label for="st-Conforme">Conforme <b>1</b></label>
+        <input type="radio" name="status" id="st-Ressalva"  value="Ressalva">
+        <label for="st-Ressalva">Ressalva <b>2</b></label>
+        <input type="radio" name="status" id="st-Retido"    value="Retido">
+        <label for="st-Retido">Retido <b>3</b></label>
+        <input type="radio" name="status" id="st-Devolvido" value="Devolvido">
+        <label for="st-Devolvido">Devolvido <b>4</b></label>
+      </div>
+
+      <div class="campo">
+        <label for="rev-parecer">Parecer</label>
+        <textarea id="rev-parecer" placeholder="Seu parecer sobre esta solicitação"></textarea>
+      </div>
+
+      <div class="acoes">
+        <div>
+          <button class="botao fantasma" id="btn-anterior">← Anterior</button>
+          <button class="botao fantasma" id="btn-pular">Pular</button>
+        </div>
+        <div>
+          <button class="botao fantasma" id="btn-resumo">Ver resumo</button>
+          <button class="botao primario" id="btn-proxima">Salvar e próxima →</button>
+        </div>
+      </div>
+      <p class="sub" style="margin:.9rem 0 0;font-size:.78rem">
+        Atalhos: <kbd>1</kbd>–<kbd>4</kbd> status · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salvar e avançar ·
+        <kbd>←</kbd> <kbd>→</kbd> navegar
+      </p>
+    </div>
+  </section>
+
+  <!-- 3. resumo -->
+  <section id="tela-resumo" class="oculto">
+    <div class="cartao">
+      <h2>Resumo da conferência <span class="sub" id="res-data"></span></h2>
+      <div class="pilulas" id="res-pilulas"></div>
+      <div id="res-pendencia"></div>
+      <div class="acoes">
+        <div>
+          <button class="botao fantasma" id="btn-voltar">← Continuar conferindo</button>
+          <button class="botao fantasma" id="btn-imprimir">Imprimir</button>
+        </div>
+        <div>
+          <button class="botao secundario" id="btn-json">Exportar dados (JSON)</button>
+          <button class="botao primario" id="btn-planilha">Gerar planilha</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="cartao">
+      <h2>Pareceres emitidos</h2>
+      <div class="lista-tipos" id="res-filtros"></div>
+      <div class="rolagem">
+        <table>
+          <thead><tr>
+            <th>S.N</th><th>Tipo</th><th class="num">Valor</th>
+            <th>Favorecido</th><th>Status</th><th>Parecer</th>
+          </tr></thead>
+          <tbody id="res-corpo"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- bibliotecas locais: o módulo funciona sem internet e sem depender de CDN -->
+<script src="./vendor/xlsx.full.min.js"></script>
+<script type="module" src="./conferencia.js"></script>
+</body>
+</html>
