@@ -4,7 +4,7 @@ Conferência do relatório **"Solicitações de Pagamentos por Débito em Conta
 Corrente"** (SCK): sobe o PDF, o módulo extrai as solicitações, você analisa uma
 a uma e no fim gera a planilha com os pareceres.
 
-Publicado em `/SIPEP/conferencia/`.
+Publicado em `/SIPEP/conferencia/` (o repositório continua chamando SIPEP).
 
 ## Como funciona
 
@@ -28,7 +28,7 @@ depois — a tela inicial lista as conferências em andamento.
 ```
 conferencia/
   index.html          telas (upload / análise / resumo)
-  conferencia.css     estilo — reusa os tokens do design system do SIPEP
+  conferencia.css     estilo — reusa os tokens do design system do NOCTUS
   conferencia.js      interface e geração da planilha
   parser.js           PDF -> dados estruturados  (sem dependência de UI)
   vendor/             pdf.js e SheetJS locais
