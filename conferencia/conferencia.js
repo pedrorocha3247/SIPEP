@@ -1,5 +1,5 @@
 /**
- * Módulo de Conferência de Pagamentos — SIPEP
+ * Módulo de Conferência de Pagamentos — NOCTUS
  *
  * Roda inteiro no navegador: o PDF é lido localmente, o progresso fica no
  * localStorage e a planilha é gerada no cliente. Nenhum dado sai da máquina.
@@ -12,7 +12,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 
 const ORDEM = ["TRANSFERÊNCIA", "TED", "DÉBITO EM CONTA", "PIX", "BOLETO"];
 const STATUS = ["Conforme", "Ressalva", "Retido", "Devolvido"];
-const CHAVE = "sipep.conferencia";
+const CHAVE = "noctus.conferencia";
+const CHAVE_ANTIGA = "sipep.conferencia";
 
 const $ = (id) => document.getElementById(id);
 const moeda = (v) =>
@@ -31,6 +32,21 @@ function salvar() {
       solicitacoes: estado.dados.solicitacoes, pareceres: estado.pareceres, i: estado.i,
     }));
   } catch (e) { /* modo privado, cota cheia: a conferência continua, só não persiste */ }
+}
+
+/**
+ * As conferências guardadas antes de o sistema virar NOCTUS continuam valendo:
+ * migra as chaves antigas na primeira abertura, sem perder nenhum parecer.
+ */
+function migrarChaves() {
+  try {
+    for (const antiga of Object.keys(localStorage)) {
+      if (!antiga.startsWith(CHAVE_ANTIGA + ".")) continue;
+      const nova = CHAVE + antiga.slice(CHAVE_ANTIGA.length);
+      if (!localStorage.getItem(nova)) localStorage.setItem(nova, localStorage.getItem(antiga));
+      localStorage.removeItem(antiga);
+    }
+  } catch (e) { /* modo privado: segue sem migrar */ }
 }
 
 function lotesSalvos() {
@@ -84,21 +100,52 @@ function ligarUpload() {
   };
   input.onchange = () => input.files[0] && processar(input.files[0]);
 
+  renderRetomar();
+}
+
+/**
+ * Lista as conferências guardadas neste navegador.
+ * `confirmando` é a chave do lote que está pedindo confirmação de remoção —
+ * confirmação inline, e não confirm() nativo, que congela a página.
+ */
+function renderRetomar(confirmando) {
+  const caixa = $("retomar");
   const salvos = lotesSalvos();
-  if (!salvos.length) return;
-  $("retomar").classList.remove("oculto");
-  $("retomar").innerHTML =
+  if (!salvos.length) { caixa.classList.add("oculto"); caixa.innerHTML = ""; return; }
+  caixa.classList.remove("oculto");
+  caixa.innerHTML =
     `<p class="sub" style="margin-bottom:.6rem">Conferências em andamento neste navegador:</p>` +
-    salvos.map((l) => `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;
-                  padding:.6rem .8rem;border:1px solid var(--color-border);
-                  border-radius:var(--radius-sm);margin-bottom:.5rem">
+    salvos.map((l) => l.chave === confirmando ? `
+      <div class="lote lote--confirma">
+        <span>Remover a conferência de <b>${l.meta?.dataInicio || "sem data"}</b>?
+          <span class="sub">${l.feitos ? `Os ${l.feitos} pareceres já dados serão perdidos.`
+                                       : "Nenhum parecer foi dado nela."}</span></span>
+        <span class="lote__acoes">
+          <button class="botao fantasma" data-acao="cancelar">Cancelar</button>
+          <button class="botao perigo" data-acao="remover" data-chave="${l.chave}">Remover</button>
+        </span>
+      </div>` : `
+      <div class="lote">
         <span>${l.meta?.dataInicio || "sem data"}
           <span class="sub">· ${l.feitos} de ${l.total} conferidas</span></span>
-        <button class="botao fantasma" data-chave="${l.chave}">Retomar</button>
+        <span class="lote__acoes">
+          <button class="botao fantasma" data-acao="retomar" data-chave="${l.chave}">Retomar</button>
+          <button class="lote__x" data-acao="perguntar" data-chave="${l.chave}"
+                  title="Remover esta conferência" aria-label="Remover esta conferência">✕</button>
+        </span>
       </div>`).join("");
-  $("retomar").querySelectorAll("button").forEach((b) => {
-    b.onclick = () => carregar(b.dataset.chave);
+
+  caixa.querySelectorAll("button").forEach((b) => {
+    b.onclick = () => {
+      const { acao, chave } = b.dataset;
+      if (acao === "retomar") carregar(chave);
+      else if (acao === "perguntar") renderRetomar(chave);
+      else if (acao === "cancelar") renderRetomar();
+      else if (acao === "remover") {
+        try { localStorage.removeItem(chave); } catch (e) { /* nada a fazer */ }
+        renderRetomar();
+      }
+    };
   });
 }
 
@@ -301,6 +348,7 @@ function gerarPlanilha() {
 }
 
 /* ------------------------------------------------------------------------- início */
+migrarChaves();
 ligarUpload();
 ligarRevisao();
 ligarResumo();
