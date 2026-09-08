@@ -52,6 +52,29 @@ async function palavrasDaPagina(pagina) {
   return saida;
 }
 
+/**
+ * Agrupa palavras em linhas tolerando pequenas variações de y.
+ *
+ * O gerador do relatório desenha a linha de "Total ==>" em pedaços com alturas
+ * levemente diferentes — o número numa altura, o valor noutra, 1 ou 2 pontos
+ * de distância. Agrupando por y exato, a linha chega quebrada e o total se
+ * perde; com tolerância, ela volta inteira.
+ */
+function agruparTolerante(palavras, tolerancia) {
+  const ordenadas = [...palavras].sort((a, b) => a.y - b.y || a.x - b.x);
+  const linhas = [];
+  let atual = null;
+  for (const p of ordenadas) {
+    if (!atual || p.y - atual.y > tolerancia) {
+      atual = { y: p.y, palavras: [p] };
+      linhas.push(atual);
+    } else {
+      atual.palavras.push(p);
+    }
+  }
+  return linhas.map((l) => l.palavras.sort((a, b) => a.x - b.x).map((p) => p.texto).join(" "));
+}
+
 function agruparLinhas(palavras) {
   const mapa = new Map();
   for (const p of palavras) {
@@ -73,7 +96,21 @@ export async function parseRelatorio(arrayBuffer, pdfjsLib) {
 
   for (let n = 1; n <= pdf.numPages; n++) {
     const pagina = await pdf.getPage(n);
-    const linhas = agruparLinhas(await palavrasDaPagina(pagina));
+    const palavras = await palavrasDaPagina(pagina);
+
+    // passe tolerante: fecha blocos por banco e lê os totais impressos
+    for (const L of agruparTolerante(palavras, 3)) {
+      const texto = L.trim();
+      if (texto.startsWith("BANCO ") && (texto.includes("Ag.") || texto.includes("C/C"))) {
+        if (blocoAtual.length) blocos.push(blocoAtual);
+        blocoAtual = [];
+        continue;
+      }
+      const mt = texto.match(RE_TOTAL);
+      if (mt) blocoAtual.push([parseInt(mt[1], 10), num(mt[2])]);
+    }
+
+    const linhas = agruparLinhas(palavras);
     const ys = [...linhas.keys()].sort((a, b) => a - b);
     const texto = new Map(ys.map((y) => [y, linhas.get(y).map((p) => p.texto).join(" ")]));
 
@@ -92,13 +129,10 @@ export async function parseRelatorio(arrayBuffer, pdfjsLib) {
 
       if (L.startsWith("BANCO ") && (L.includes("Ag.") || L.includes("C/C"))) {
         banco = L; ignorar.add(y);
-        if (blocoAtual.length) blocos.push(blocoAtual);
-        blocoAtual = [];
         continue;
       }
       if (TIPOS.includes(L)) { tipo = TIPO_CURTO[L] || L; ignorar.add(y); continue; }
-      const mt = L.match(RE_TOTAL);
-      if (mt) { blocoAtual.push([parseInt(mt[1], 10), num(mt[2])]); ignorar.add(y); paradas.push(y); continue; }
+      // o valor numérico do total é lido no passe tolerante, abaixo
       // fragmentos de linha de total que caem em outro bucket de y
       if (/Total ==>|Solicitação\(ões\)/.test(L) || /^R\$\s*[\d.,]+$/.test(L)) { ignorar.add(y); paradas.push(y); continue; }
       if (RUIDO.some((p) => L.startsWith(p))) { ignorar.add(y); continue; }
@@ -141,6 +175,7 @@ export async function parseRelatorio(arrayBuffer, pdfjsLib) {
 
   // confere o extraído contra os totais impressos no rodapé de cada seção
   let qtdRel = 0, valorRel = 0;
+  const totaisLidos = blocos.reduce((a, b) => a + b.length, 0);
   for (let b of blocos) {
     if (b.length > 1) {
       const q = b.slice(0, -1).reduce((a, x) => a + x[0], 0);
@@ -158,6 +193,7 @@ export async function parseRelatorio(arrayBuffer, pdfjsLib) {
     validacao: {
       qtdExtraida: solicitacoes.length, valorExtraido,
       qtdRelatorio: qtdRel, valorRelatorio: valorRel,
+      totaisLidos, blocos: blocos.length,
       confere: solicitacoes.length === qtdRel && Math.abs(valorExtraido - valorRel) < 0.01,
     },
   };
