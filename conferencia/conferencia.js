@@ -277,6 +277,7 @@ function ligarRevisao() {
 
 /* ------------------------------------------------------------------------- resumo */
 let filtro = null;
+let ultimoAberto = null;   // cartão de onde o conferidor foi aberto
 
 function mostrarResumo() {
   irPara("resumo");
@@ -317,22 +318,52 @@ function mostrarResumo() {
   $("res-corpo").innerHTML = visiveis
     .map((s) => {
       const p = estado.pareceres[s.sn] || {};
-      return `<div class="parecer${p.status ? "" : " parecer--pendente"}">
+      return `<div class="parecer${p.status ? "" : " parecer--pendente"}"
+                   data-sn="${esc(s.sn)}" role="button" tabindex="0"
+                   title="Abrir esta solicitação para conferir">
         <div class="parecer__topo">
           <span class="parecer__sn">${s.sn}</span>
           <span class="parecer__valor">R$ ${moeda(s.valor)}</span>
           ${p.status
             ? `<span class="marca marca--${idDoStatus(p.status)}">${p.status}</span>`
             : `<span class="marca marca--nenhum">Sem conferir</span>`}
+          <span class="parecer__abrir">Abrir</span>
         </div>
         <div class="parecer__fav">${esc(s.favorecido)}</div>
         <div class="parecer__dest">${esc(s.destinacao)}</div>
         ${p.parecer ? `<div class="parecer__texto">${esc(p.parecer)}</div>` : ""}
       </div>`;
     }).join("");
+
+  if (ultimoAberto) {
+    const alvo = $("res-corpo").querySelector(`[data-sn="${CSS.escape(ultimoAberto)}"]`);
+    if (alvo && !$("res-lista").hidden) alvo.scrollIntoView({ block: "center" });
+  }
+}
+
+/** Abre no conferidor a solicitação do cartão clicado. */
+function abrirSolicitacao(sn) {
+  const i = estado.itens.findIndex((s) => s.sn === sn);
+  if (i < 0) return;
+  ultimoAberto = sn;
+  estado.i = i;
+  irPara("revisao");
+  render();
 }
 
 function ligarResumo() {
+  // clique em qualquer ponto do cartão abre a solicitação, mas sem atrapalhar
+  // quem estiver só selecionando texto para copiar
+  $("res-corpo").onclick = (e) => {
+    if (String(window.getSelection())) return;
+    const cartao = e.target.closest(".parecer");
+    if (cartao) abrirSolicitacao(cartao.dataset.sn);
+  };
+  $("res-corpo").onkeydown = (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const cartao = e.target.closest(".parecer");
+    if (cartao) { e.preventDefault(); abrirSolicitacao(cartao.dataset.sn); }
+  };
   $("btn-voltar").onclick = () => { irPara("revisao"); render(); };
   $("btn-imprimir").onclick = () => window.print();
   $("btn-planilha").onclick = gerarPlanilha;
