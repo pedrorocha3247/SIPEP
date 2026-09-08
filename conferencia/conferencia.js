@@ -345,28 +345,258 @@ function ligarResumo() {
 }
 
 /* ---------------------------------------------------------------------- planilha */
-function gerarPlanilha() {
-  const wb = XLSX.utils.book_new();
-  for (const tipo of ORDEM) {
-    const linhas = estado.itens.filter((s) => s.tipo === tipo);
-    if (!linhas.length) continue;
-    const aoa = [["S.N", "Valor (R$)", "Favorecido", "Destinação", "STATUS", "PARECER"]];
-    for (const s of linhas) {
-      const p = estado.pareceres[s.sn] || {};
-      aoa.push([s.sn, s.valor, s.favorecido, s.destinacao, p.status || "", p.parecer || ""]);
-    }
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!cols"] = [{ wch: 10 }, { wch: 13 }, { wch: 32 }, { wch: 60 }, { wch: 14 }, { wch: 46 }];
-    ws["!autofilter"] = { ref: `A1:F${aoa.length}` };
-    ws["!freeze"] = { xSplit: 0, ySplit: 1 };
-    for (let r = 1; r < aoa.length; r++) {
-      const c = XLSX.utils.encode_cell({ r, c: 1 });
-      if (ws[c]) ws[c].z = "#,##0.00";
-    }
-    XLSX.utils.book_append_sheet(wb, ws, tipo.slice(0, 31));
+const AZUL = "FF1F3864";        // cabeçalho
+const CINZA_LINHA = "FFD9D9D9"; // divisórias
+const COR_STATUS = {
+  "Aprovado": "FF15803D",
+  "Aguardando esclarecimentos": "FF1D4ED8",
+  "Recusado": "FFB91C1C",
+};
+
+/**
+ * A biblioteca de planilha (~950KB) só é carregada quando alguém clica em gerar.
+ * Tenta a cópia local primeiro — se ela não estiver no servidor, cai no CDN.
+ */
+async function carregarExcelJS() {
+  if (window.ExcelJS) return;
+  const origens = [
+    "./vendor/exceljs.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js",
+  ];
+  for (const src of origens) {
+    try {
+      await new Promise((ok, falha) => {
+        const s = document.createElement("script");
+        s.src = src; s.onload = ok; s.onerror = () => falha(new Error(src));
+        document.head.appendChild(s);
+      });
+      if (window.ExcelJS) return;
+    } catch (e) { /* tenta a próxima origem */ }
   }
-  const ref = (estado.dados.meta.dataInicio || "").replace(/\//g, "-");
-  XLSX.writeFile(wb, `Conferencia_Pagamentos_${ref}.xlsx`);
+  throw new Error("não consegui carregar a biblioteca de planilha");
+}
+
+function baixar(blob, nome) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = nome; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Mostra um erro no lugar do bloco de pendência, sem alert() nativo. */
+function alertaNoResumo(texto) {
+  $("res-pendencia").innerHTML = `<div class="alerta erro">${texto}</div>`;
+}
+
+const statusDe = (sn) => estado.pareceres[sn]?.status || "";
+const statusNaPlanilha = (sn) => statusDe(sn) || "Sem conferir";
+const parecerDe = (sn) => estado.pareceres[sn]?.parecer || "";
+
+/** Largura de coluna pelo maior conteúdo, com piso e teto. */
+function largura(valores, minimo, maximo) {
+  const maior = valores.reduce((m, v) => Math.max(m, String(v ?? "").length), 0);
+  return Math.min(Math.max(minimo, maior + 2), maximo);
+}
+
+function estilizarCabecalho(linha) {
+  linha.height = 24;
+  linha.eachCell((c) => {
+    c.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AZUL } };
+    c.alignment = { vertical: "middle", horizontal: "left" };
+    c.border = { bottom: { style: "thin", color: { argb: AZUL } } };
+  });
+}
+
+/** Aba de solicitações. `comTipo` inclui a coluna Tipo (usada só na aba TODAS). */
+function abaSolicitacoes(wb, nome, itens, comTipo) {
+  const ws = wb.addWorksheet(nome, {
+    views: [{ showGridLines: false, state: "frozen", ySplit: 1 }],
+  });
+  const colunas = [
+    { header: "S.N", key: "sn" },
+    ...(comTipo ? [{ header: "Tipo", key: "tipo" }] : []),
+    { header: "Valor (R$)", key: "valor" },
+    { header: "Favorecido", key: "favorecido" },
+    { header: "Destinação", key: "destinacao" },
+    { header: "Status", key: "status" },
+    { header: "Parecer", key: "parecer" },
+  ];
+  ws.columns = colunas;
+
+  for (const s of itens) {
+    ws.addRow({
+      sn: s.sn, tipo: s.tipo, valor: s.valor,
+      favorecido: s.favorecido, destinacao: s.destinacao,
+      status: statusNaPlanilha(s.sn), parecer: parecerDe(s.sn),
+    });
+  }
+
+  // largura pelo conteúdo; as colunas longas quebram linha e o Excel ajusta a altura
+  const w = (k, min, max) => largura(itens.map((s) => ({
+    sn: s.sn, tipo: s.tipo, valor: moeda(s.valor), favorecido: s.favorecido,
+    destinacao: s.destinacao, status: statusNaPlanilha(s.sn), parecer: parecerDe(s.sn),
+  }[k])).concat(colunas.find((c) => c.key === k).header), min, max);
+
+  ws.getColumn("sn").width = w("sn", 10, 14);
+  if (comTipo) ws.getColumn("tipo").width = w("tipo", 14, 22);
+  ws.getColumn("valor").width = 14;
+  ws.getColumn("favorecido").width = w("favorecido", 22, 42);
+  ws.getColumn("destinacao").width = 58;
+  ws.getColumn("status").width = 27;
+  ws.getColumn("parecer").width = 46;
+
+  estilizarCabecalho(ws.getRow(1));
+
+  ws.eachRow((linha, n) => {
+    if (n === 1) return;
+    linha.eachCell((c) => {
+      c.font = { name: "Calibri", size: 11 };
+      c.alignment = { vertical: "top", wrapText: false };
+      c.border = { bottom: { style: "hair", color: { argb: CINZA_LINHA } } };
+    });
+    linha.getCell("valor").numFmt = "#,##0.00";
+    linha.getCell("valor").alignment = { vertical: "top", horizontal: "right" };
+    for (const k of ["favorecido", "destinacao", "parecer"]) {
+      linha.getCell(k).alignment = { vertical: "top", wrapText: true };
+    }
+    const st = linha.getCell("status");
+    st.font = { name: "Calibri", size: 11, bold: !!COR_STATUS[st.value],
+                color: { argb: COR_STATUS[st.value] || "FF808080" } };
+  });
+
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: colunas.length } };
+  return ws;
+}
+
+function abaResumo(wb) {
+  const ws = wb.addWorksheet("RESUMO", { views: [{ showGridLines: false }] });
+  ws.columns = [{ width: 30 }, { width: 10 }, { width: 18 }, { width: 12 },
+                { width: 28 }, { width: 12 }, { width: 14 }];
+
+  const titulo = (linha, texto, tamanho) => {
+    const c = ws.getCell(`A${linha}`);
+    c.value = texto;
+    c.font = { name: "Calibri", size: tamanho, bold: true, color: { argb: AZUL } };
+  };
+  const cabecalho = (linha, textos) => {
+    const l = ws.getRow(linha);
+    textos.forEach((t, i) => (l.getCell(i + 1).value = t));
+    l.height = 22;
+    for (let i = 1; i <= textos.length; i++) {
+      const c = l.getCell(i);
+      c.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AZUL } };
+      c.alignment = { vertical: "middle", horizontal: i === 1 ? "left" : "center", wrapText: true };
+    }
+  };
+
+  titulo(1, "CONFERÊNCIA DE PAGAMENTOS", 16);
+  ws.getCell("A2").value =
+    `Relatório de ${estado.dados.meta.dataInicio || "—"} · ${estado.itens.length} solicitações · ` +
+    `R$ ${moeda(estado.dados.validacao.valorExtraido)}`;
+  ws.getCell("A2").font = { name: "Calibri", size: 11, color: { argb: "FF595959" } };
+  ws.getCell("A3").value = estado.dados.meta.empresa || "";
+  ws.getCell("A3").font = { name: "Calibri", size: 10, color: { argb: "FF808080" } };
+
+  // ---- por forma de pagamento
+  titulo(5, "POR FORMA DE PAGAMENTO", 12);
+  const nomes = STATUS.map((s) => s.valor);
+  cabecalho(6, ["Forma de pagamento", "Qtde", "Valor (R$)", ...nomes, "Sem conferir"]);
+
+  let linha = 7;
+  const tipos = ORDEM.filter((t) => estado.itens.some((s) => s.tipo === t));
+  for (const t of tipos) {
+    const doTipo = estado.itens.filter((s) => s.tipo === t);
+    const conta = (v) => doTipo.filter((s) => (statusDe(s.sn) || "Sem conferir") === v).length;
+    const l = ws.getRow(linha);
+    l.getCell(1).value = t;
+    l.getCell(2).value = doTipo.length;
+    l.getCell(3).value = doTipo.reduce((a, s) => a + (s.valor || 0), 0);
+    nomes.forEach((n, i) => (l.getCell(4 + i).value = conta(n)));
+    l.getCell(4 + nomes.length).value = conta("Sem conferir");
+    linha++;
+  }
+
+  const total = ws.getRow(linha);
+  total.getCell(1).value = "TOTAL";
+  total.getCell(2).value = { formula: `SUM(B7:B${linha - 1})` };
+  total.getCell(3).value = { formula: `SUM(C7:C${linha - 1})` };
+  for (let i = 0; i <= nomes.length; i++) {
+    const col = String.fromCharCode(68 + i); // D em diante
+    total.getCell(4 + i).value = { formula: `SUM(${col}7:${col}${linha - 1})` };
+  }
+  const fimTipos = linha;
+
+  // ---- por status
+  const inicioStatus = linha + 3;
+  titulo(inicioStatus - 1, "POR STATUS", 12);
+  cabecalho(inicioStatus, ["Status", "Qtde", "Valor (R$)", "% do valor"]);
+  linha = inicioStatus + 1;
+  const valorTotal = estado.itens.reduce((a, s) => a + (s.valor || 0), 0) || 1;
+  for (const nome of [...nomes, "Sem conferir"]) {
+    const doStatus = estado.itens.filter((s) => (statusDe(s.sn) || "Sem conferir") === nome);
+    if (!doStatus.length) continue;
+    const soma = doStatus.reduce((a, s) => a + (s.valor || 0), 0);
+    const l = ws.getRow(linha);
+    l.getCell(1).value = nome;
+    l.getCell(2).value = doStatus.length;
+    l.getCell(3).value = soma;
+    l.getCell(4).value = soma / valorTotal;
+    if (COR_STATUS[nome]) {
+      l.getCell(1).font = { name: "Calibri", size: 11, bold: true, color: { argb: COR_STATUS[nome] } };
+    }
+    linha++;
+  }
+
+  // formatação das duas tabelas
+  for (let n = 7; n < linha; n++) {
+    const l = ws.getRow(n);
+    l.eachCell((c, i) => {
+      if (!c.font) c.font = { name: "Calibri", size: 11 };
+      c.border = { bottom: { style: "hair", color: { argb: CINZA_LINHA } } };
+      if (i >= 2) c.alignment = { horizontal: "center" };
+      if (i === 3) { c.numFmt = "#,##0.00"; c.alignment = { horizontal: "right" }; }
+    });
+    if (n >= inicioStatus + 1) l.getCell(4).numFmt = "0.0%";
+  }
+  const lt = ws.getRow(fimTipos);
+  lt.eachCell((c) => {
+    c.font = { name: "Calibri", size: 11, bold: true };
+    c.border = { top: { style: "thin", color: { argb: AZUL } } };
+  });
+  lt.getCell(3).numFmt = "#,##0.00";
+
+  return ws;
+}
+
+async function gerarPlanilha() {
+  const btn = $("btn-planilha");
+  const rotulo = btn.textContent;
+  btn.disabled = true; btn.textContent = "Gerando…";
+  try {
+    await carregarExcelJS();
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "NOCTUS — Conferência de Pagamentos";
+    wb.created = new Date();
+
+    abaResumo(wb);
+    abaSolicitacoes(wb, "TODAS", estado.itens, true);
+    for (const tipo of ORDEM) {
+      const linhas = estado.itens.filter((s) => s.tipo === tipo);
+      if (linhas.length) abaSolicitacoes(wb, tipo.slice(0, 31), linhas, false);
+    }
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const ref = (estado.dados.meta.dataInicio || "").replace(/\//g, "-");
+    baixar(new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }), `Conferencia_Pagamentos_${ref}.xlsx`);
+  } catch (e) {
+    alertaNoResumo(`Não consegui gerar a planilha: ${e.message}`);
+  } finally {
+    btn.disabled = false; btn.textContent = rotulo;
+  }
 }
 
 /* ------------------------------------------------------------------------- início */
