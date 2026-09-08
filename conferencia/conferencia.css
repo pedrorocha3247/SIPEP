@@ -101,34 +101,57 @@ kbd{background:var(--color-surface-raised);border:1px solid var(--color-border);
   border-radius:4px;padding:.1rem .35rem;font:600 .7rem var(--font-sans);color:var(--color-text-secondary)}
 
 /* indicadores */
-.pilulas{display:grid;grid-template-columns:repeat(auto-fit,minmax(126px,1fr));
-  grid-auto-rows:1fr;gap:.7rem;margin-bottom:1.1rem}
-.pilula{background:var(--color-surface-raised);border:1px solid var(--color-border);
-  border-radius:var(--radius-md);padding:.7rem .85rem;min-width:0;
-  display:flex;flex-direction:column;justify-content:space-between;gap:.35rem}
-.pilula b{display:block;font-weight:700;font-variant-numeric:tabular-nums;
-  line-height:1.15;white-space:nowrap;font-size:1.3rem}
-/* o total é o único número comprido: encolhe até caber na largura da caixa */
-.pilula--valor b{font-size:clamp(.82rem,1.55vw,1.05rem)}
-.pilula span{display:block;font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;
-  color:var(--color-text-muted);font-weight:600;line-height:1.3}
-@media (max-width:560px){.pilulas{grid-template-columns:repeat(2,1fr)}}
+/* resumo: os dois totais em cima, os contadores de status embaixo */
+.resumo-totais{display:flex;gap:2.5rem;flex-wrap:wrap;padding-bottom:1rem;margin-bottom:1rem;
+  border-bottom:1px solid var(--color-border)}
+.resumo-totais span{display:block;font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--color-text-muted);font-weight:600;margin-bottom:.2rem}
+.resumo-totais b{display:block;font-size:1.5rem;font-weight:700;line-height:1.1;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.resumo-status{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));
+  grid-auto-rows:1fr;gap:.6rem;margin-bottom:1.1rem}
+/* número à esquerda com largura fixa e rótulo centrado: alinha em qualquer largura */
+.status-card{display:flex;align-items:center;gap:.75rem;padding:.7rem .9rem;
+  background:var(--color-surface-raised);border:1px solid var(--color-border);
+  border-left:3px solid var(--color-text-muted);border-radius:var(--radius-md)}
+.status-card b{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;
+  min-width:2.4ch;text-align:right;flex-shrink:0}
+.status-card span{font-size:.8rem;color:var(--color-text-secondary);line-height:1.25}
+.status-card--g{border-left-color:var(--color-green)}
+.status-card--g b{color:var(--color-green)}
+.status-card--b{border-left-color:var(--color-blue)}
+.status-card--b b{color:var(--color-blue-hover)}
+.status-card--v{border-left-color:var(--color-error)}
+.status-card--v b{color:var(--color-error)}
+.status-card--n b{color:var(--color-text-muted)}
 .pilula.g b{color:var(--color-green)} .pilula.a b{color:var(--color-warn)}
 .pilula.b b{color:var(--color-blue)} .pilula.v b{color:var(--color-error)}
 
 /* tabela */
-.rolagem{overflow-x:auto;border:1px solid var(--color-border);border-radius:var(--radius-md)}
 .cabecalho-recolhivel{display:flex;align-items:center;justify-content:space-between;
   gap:1rem;margin-bottom:1rem}
 .cabecalho-recolhivel h2{margin:0}
-table{width:100%;border-collapse:collapse;font-size:.82rem;min-width:940px}
-th{background:var(--color-surface-raised);text-align:left;padding:.6rem .7rem;font-weight:600;
-  font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-secondary);
-  position:sticky;top:0}
-td{border-top:1px solid var(--color-border);padding:.6rem .7rem;vertical-align:top}
-td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-tr.pendente td{color:var(--color-text-muted)}
-.marca{display:inline-block;padding:.15rem .5rem;border-radius:999px;font-size:.7rem;font-weight:600}
+
+/* cada parecer é um cartão: o texto quebra em vez de empurrar a página para o lado */
+.parecer{border:1px solid var(--color-border);border-radius:var(--radius-md);
+  background:var(--color-surface-raised);padding:.7rem .85rem;margin-bottom:.5rem}
+.parecer--pendente{opacity:.65}
+.parecer__topo{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap;margin-bottom:.4rem}
+.parecer__sn{font-size:.8rem;font-weight:600;font-variant-numeric:tabular-nums;
+  color:var(--color-text-secondary)}
+.parecer__valor{font-size:.95rem;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.parecer__topo .marca{margin-left:auto}
+.parecer__fav{font-size:.88rem;font-weight:600;line-height:1.35}
+.parecer__dest{font-size:.8rem;color:var(--color-text-secondary);line-height:1.4;margin-top:.15rem}
+/* neutro de proposito: verde aqui contradiz um parecer de recusa */
+.parecer__texto{margin-top:.5rem;padding:.45rem .6rem;border-left:2px solid var(--color-border);
+  background:var(--color-surface);border-radius:0 var(--radius-sm) var(--radius-sm) 0;
+  font-size:.83rem;line-height:1.4}
+.marca{display:inline-block;padding:.15rem .5rem;border-radius:999px;font-size:.7rem;
+  font-weight:600;white-space:nowrap}
+.marca--nenhum{background:var(--color-surface);color:var(--color-text-muted);
+  border:1px solid var(--color-border)}
 .marca--aprovado{background:var(--color-green-dim);color:var(--color-green-hover)}
 .marca--aguardando{background:var(--color-blue-dim);color:var(--color-blue-hover)}
 .marca--recusado{background:var(--color-error-bg);color:var(--color-error)}
@@ -152,5 +175,43 @@ tr.pendente td{color:var(--color-text-muted)}
 .chip{background:var(--color-surface-raised);border:1px solid var(--color-border);
   border-radius:999px;padding:.35rem .8rem;font-size:.78rem;color:var(--color-text-secondary);cursor:pointer}
 .chip.on{border-color:var(--color-green);color:var(--color-green-hover);background:var(--color-green-dim)}
-@media print{.topo,.acoes,.botao,.lista-tipos{display:none!important}
-  body{background:#fff;color:#000}.cartao{box-shadow:none;border-color:#ccc;background:#fff}}
+/* ---------------------------------------------------------------- impressão */
+@media print{
+  @page{margin:12mm}
+  body{background:#fff;color:#000;font-size:10pt}
+  main{max-width:none;margin:0;padding:0}
+
+  /* controles não têm sentido no papel */
+  .acoes,.botao,.lista-tipos,#res-pendencia{display:none!important}
+
+  /* o cabeçalho vira o título do documento impresso */
+  .topo{background:#fff;border-bottom:1px solid #999;padding:0 0 3mm;margin-bottom:5mm}
+  .topo h1{color:#000;font-size:12pt}
+  .topo h1 span{color:#555}
+  .topo nav{display:none}
+
+  .cartao{box-shadow:none;border:none;background:#fff;padding:0;margin-bottom:7mm}
+  h2{color:#000;font-size:11pt}
+  .sub{color:#444}
+
+  .resumo-totais{border-bottom:1px solid #999;gap:14mm;padding-bottom:3mm;margin-bottom:3mm}
+  .resumo-totais span{color:#555}
+  .resumo-totais b{color:#000;font-size:13pt}
+
+  .resumo-status{grid-template-columns:repeat(4,1fr);gap:2mm;break-inside:avoid}
+  .status-card{background:#fff;border:1px solid #999;border-left-width:2.5pt;padding:2mm 2.5mm}
+  .status-card b{color:#000;font-size:12pt}
+  .status-card span{color:#333;font-size:8pt}
+
+  /* a lista sai impressa mesmo estando recolhida na tela */
+  #res-lista[hidden]{display:block!important}
+  .parecer{background:#fff;border:1px solid #bbb;padding:2mm 2.5mm;margin-bottom:2mm;
+    break-inside:avoid;page-break-inside:avoid}
+  .parecer--pendente{opacity:1}
+  .parecer__sn{color:#555}
+  .parecer__valor{color:#000}
+  .parecer__fav{color:#000}
+  .parecer__dest{color:#333}
+  .parecer__texto{background:#f2f2f2;border-left:2pt solid #999;color:#000}
+  .marca{background:#fff!important;border:1px solid #666;color:#000!important;padding:.1rem .4rem}
+}
