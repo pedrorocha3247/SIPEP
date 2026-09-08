@@ -289,13 +289,13 @@ function mostrarResumo() {
     contagem[st in contagem ? st : "Sem conferir"]++;
   }
   const classe = { Aprovado: "g", "Aguardando esclarecimentos": "b",
-                   Recusado: "v", "Sem conferir": "" };
-  $("res-pilulas").innerHTML =
-    `<div class="pilula"><b>${estado.itens.length}</b><span>Solicitações</span></div>
-     <div class="pilula pilula--valor"><b>${moeda(estado.dados.validacao.valorExtraido)}</b>
-       <span>Valor total (R$)</span></div>` +
-    Object.entries(contagem).filter(([, n]) => n)
-      .map(([k, n]) => `<div class="pilula ${classe[k]}"><b>${n}</b><span>${k}</span></div>`).join("");
+                   Recusado: "v", "Sem conferir": "n" };
+  $("res-totais").innerHTML =
+    `<div><span>Solicitações</span><b>${estado.itens.length}</b></div>
+     <div><span>Valor total</span><b>R$ ${moeda(estado.dados.validacao.valorExtraido)}</b></div>`;
+  $("res-status").innerHTML = Object.entries(contagem).filter(([, n]) => n)
+    .map(([k, n]) => `<div class="status-card status-card--${classe[k]}">
+        <b>${n}</b><span>${k}</span></div>`).join("");
 
   $("res-pendencia").innerHTML = contagem["Sem conferir"]
     ? `<div class="alerta">${contagem["Sem conferir"]} solicitação(ões) ainda sem status.</div>`
@@ -317,11 +317,18 @@ function mostrarResumo() {
   $("res-corpo").innerHTML = visiveis
     .map((s) => {
       const p = estado.pareceres[s.sn] || {};
-      return `<tr class="${p.status ? "" : "pendente"}">
-        <td>${s.sn}</td><td>${s.tipo}</td><td class="num">${moeda(s.valor)}</td>
-        <td>${esc(s.favorecido)}</td><td>${esc(s.destinacao)}</td>
-        <td>${p.status ? `<span class="marca marca--${idDoStatus(p.status)}">${p.status}</span>` : "—"}</td>
-        <td>${esc(p.parecer)}</td></tr>`;
+      return `<div class="parecer${p.status ? "" : " parecer--pendente"}">
+        <div class="parecer__topo">
+          <span class="parecer__sn">${s.sn}</span>
+          <span class="parecer__valor">R$ ${moeda(s.valor)}</span>
+          ${p.status
+            ? `<span class="marca marca--${idDoStatus(p.status)}">${p.status}</span>`
+            : `<span class="marca marca--nenhum">Sem conferir</span>`}
+        </div>
+        <div class="parecer__fav">${esc(s.favorecido)}</div>
+        <div class="parecer__dest">${esc(s.destinacao)}</div>
+        ${p.parecer ? `<div class="parecer__texto">${esc(p.parecer)}</div>` : ""}
+      </div>`;
     }).join("");
 }
 
