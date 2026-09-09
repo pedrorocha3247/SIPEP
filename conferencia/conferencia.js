@@ -208,7 +208,7 @@ function irPara(tela) {
   telaAtual = tela;
   const a = $("voltar-topo");
   if (a) {
-    a.textContent = tela === "upload" ? "← Voltar ao NOCTUS" : "← Voltar ao relatório";
+    a.textContent = tela === "upload" ? "Voltar" : "Voltar ao relatório";
     a.href = tela === "upload" ? "../#/" : "#";
     a.title = tela === "upload" ? "" : "Voltar para a tela do relatório";
   }
