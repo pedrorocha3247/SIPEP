@@ -22,7 +22,7 @@ const COLUNAS = {
 };
 const TIPOS = ["TRANSFERÊNCIA BANCÁRIA CONTA CORRENTE","TED","DÉBITO EM CONTA","PIX","BOLETO"];
 const TIPO_CURTO = {"TRANSFERÊNCIA BANCÁRIA CONTA CORRENTE":"TRANSFERÊNCIA"};
-const RUIDO = ["Total ==>","Página","Filial:","SOLICITAÇÕES DE","15 - MOMENTUM","DDP -"];
+const RUIDO = ["Total ==>","Página","Filial:","SOLICITAÇÕES DE","DDP -"];
 const RE_TOTAL = /Total ==>\s+(\d+)\s+Solicitação\(ões\)\s+R\$\s+([\d.,]+)/;
 
 const coluna = (fam, x) => (COLUNAS[fam].find(([, i, f]) => x >= i && x < f) || ["poderDispendio"])[0];
@@ -142,6 +142,8 @@ export async function parseRelatorio(arrayBuffer, pdfjsLib) {
       // fragmentos de linha de total que caem em outro bucket de y
       if (/Total ==>|Solicitação\(ões\)/.test(L) || /^R\$\s*[\d.,]+$/.test(L)) { ignorar.add(y); paradas.push(y); continue; }
       if (RUIDO.some((p) => L.startsWith(p))) { ignorar.add(y); continue; }
+      // a caixa da empresa se repete no alto de cada página
+      if (meta.empresa && L === meta.empresa) { ignorar.add(y); continue; }
       if (/^S\.N\b/.test(L)) {
         ignorar.add(y);
         const sn = linhas.get(y).find((p) => p.texto === "S.N");
@@ -149,7 +151,12 @@ export async function parseRelatorio(arrayBuffer, pdfjsLib) {
         for (const yy of ys) if (yy >= y - 25 && yy <= y + 14) ignorar.add(yy);
         continue;
       }
-      if (linhas.get(y).some((p) => p.texto === "MATRIZ" && p.x >= 45 && p.x < 95))
+      // Âncora da solicitação: o S.N, na primeira coluna. Antes a âncora era a
+      // palavra "MATRIZ" na coluna FILIAL — servia só para a empresa 15. Em
+      // relatórios de outras empresas a filial vem com outro nome (SLIM, por
+      // exemplo) e nenhuma solicitação era extraída.
+      const fimSN = COLUNAS[familia][0][2];
+      if (linhas.get(y).some((p) => /^\d{6,8}$/.test(p.texto) && p.x < fimSN))
         ancoras.push({ y, banco, tipo, familia });
     }
 
