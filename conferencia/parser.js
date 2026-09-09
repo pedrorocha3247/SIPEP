@@ -88,7 +88,7 @@ function agruparLinhas(palavras) {
 
 export async function parseRelatorio(arrayBuffer, pdfjsLib) {
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const meta = { empresa: null, dataInicio: null, dataFim: null, emitidoEm: null, paginas: pdf.numPages };
+  const meta = { empresa: null, empresaCodigo: null, empresaNome: null, dataInicio: null, dataFim: null, emitidoEm: null, paginas: pdf.numPages };
   const solicitacoes = [];
   const blocos = [];
   let blocoAtual = [];
@@ -120,7 +120,13 @@ export async function parseRelatorio(arrayBuffer, pdfjsLib) {
     for (const y of ys) {
       const L = (texto.get(y) || "").trim();
 
-      if (!meta.empresa && L.startsWith("15 - MOMENTUM")) meta.empresa = L;
+      // caixa da empresa: "15 - MOMENTUM EMPREENDIMENTOS IMOBILIARIOS LTDA.",
+      // sempre antes da faixa de datas. O código tem no máximo 4 dígitos, o que
+      // separa essa linha das solicitações (S.N tem 7).
+      if (!meta.empresa && !meta.dataInicio) {
+        const me = L.match(/^(\d{1,4})\s*-\s*([A-Za-zÀ-ÿ][^\n]*)$/);
+        if (me) { meta.empresa = L; meta.empresaCodigo = me[1]; meta.empresaNome = me[2].trim(); }
+      }
       if (!meta.dataInicio) {
         const m = L.match(/CORRENTE - (\d{2}\/\d{2}\/\d{4}) a (\d{2}\/\d{2}\/\d{4})/);
         if (m) { meta.dataInicio = m[1]; meta.dataFim = m[2]; }
