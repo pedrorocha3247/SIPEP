@@ -227,19 +227,53 @@ function alertas(s) {
   return out;
 }
 
-/** Mesmo documento + mesmo CNPJ em S.N diferentes = duplicidade real. */
+const numeroNF = (v) => { const n = parseInt(v, 10); return isNaN(n) ? null : String(n); };
+
+/**
+ * Cruza as notas fiscais do lote, por fornecedor.
+ *
+ * Duas situações distintas, que não podem virar o mesmo alerta:
+ *
+ *  1. O MESMO documento cadastrado em duas solicitações do mesmo CNPJ.
+ *     Duplicidade de pagamento até prova em contrário.
+ *
+ *  2. A NF citada na destinação de uma solicitação é a nota de OUTRA
+ *     solicitação do mesmo fornecedor — foi assim que a 1452750 do
+ *     relatório da SLIM (doc 59053) apareceu citando a NF 115157, que é
+ *     o documento da 1452749. Aqui não há conclusão: pode ser erro de
+ *     digitação na destinação, referência legítima ou pagamento em
+ *     duplicidade. É sinal para o conferente olhar, não veredito.
+ *
+ * O cruzamento é sempre dentro do mesmo CPF/CNPJ: numeração de nota fiscal
+ * é por emitente, então o mesmo número em fornecedores diferentes é
+ * coincidência, não indício.
+ */
 function marcarRepetidos(solicitacoes) {
-  const idx = new Map();
+  const comoDoc = new Map();     // "cnpj|nf" -> Set de S.N que têm essa NF cadastrada
+  const emQualquer = new Map();  // "cnpj|nf" -> Set de S.N que citam ou cadastram essa NF
+  const envolvidas = new Map();  // S.N -> Set de NFs da solicitação
+  const junta = (mapa, k, sn) => { if (!mapa.has(k)) mapa.set(k, new Set()); mapa.get(k).add(sn); };
+
   for (const s of solicitacoes) {
-    const doc = docCadastrado(s.destinacao);
-    if (!doc) continue;
-    const k = `${s.cpfCnpj}|${doc}`;
-    if (!idx.has(k)) idx.set(k, new Set());
-    idx.get(k).add(s.sn);
+    const doc = numeroNF(docCadastrado(s.destinacao) || "");
+    const nfs = new Set(nfsCitadas(s.destinacao).map(numeroNF).filter(Boolean));
+    if (doc) { nfs.add(doc); junta(comoDoc, `${s.cpfCnpj}|${doc}`, s.sn); }
+    envolvidas.set(s.sn, nfs);
+    for (const nf of nfs) junta(emQualquer, `${s.cpfCnpj}|${nf}`, s.sn);
   }
+
   for (const s of solicitacoes) {
-    const doc = docCadastrado(s.destinacao);
-    if (doc && (idx.get(`${s.cpfCnpj}|${doc}`) || new Set()).size > 1)
-      s.alertas.push("Documento já pago em outra solicitação do lote");
+    const doc = numeroNF(docCadastrado(s.destinacao) || "");
+    for (const nf of envolvidas.get(s.sn) || []) {
+      const k = `${s.cpfCnpj}|${nf}`;
+      const mesmoDoc = [...(comoDoc.get(k) || [])].filter((sn) => sn !== s.sn);
+      if (doc === nf && mesmoDoc.length) {
+        s.alertas.push(`Documento ${nf} já cadastrado na(s) solicitação(ões) ${mesmoDoc.join(", ")}`);
+        continue;
+      }
+      const outras = [...(emQualquer.get(k) || [])].filter((sn) => sn !== s.sn);
+      if (outras.length)
+        s.alertas.push(`NF ${nf} citada aqui também aparece na(s) solicitação(ões) ${outras.join(", ")}`);
+    }
   }
 }
