@@ -172,7 +172,7 @@ function lotesSalvos() {
                             a.empresa.localeCompare(b.empresa));
 }
 
-function carregar(chave) {
+function carregar(chave, destino) {
   const v = JSON.parse(localStorage.getItem(chave));
   estado.dados = { meta: v.meta, validacao: v.validacao, solicitacoes: v.solicitacoes };
   estado.pareceres = v.pareceres || {};
@@ -180,6 +180,9 @@ function carregar(chave) {
   estado.i = Math.min(v.i || 0, estado.itens.length - 1);
   irPara("revisao");
   render();
+  // "Ver resumo" abre o relatório do dia direto; a tela de conferência fica
+  // montada atrás, para o botão "Continuar conferindo" cair no lugar certo.
+  if (destino === "resumo") mostrarResumo();
 }
 
 /* ------------------------------------------------------------------- utilidades */
@@ -212,6 +215,9 @@ function ligarUpload() {
   renderRetomar();
 }
 
+/** Quais dias estão expandidos na lista de conferências salvas (data -> aberto). */
+const diasAbertos = {};
+
 /**
  * Lista as conferências guardadas neste navegador.
  * `confirmando` é a chave do lote que está pedindo confirmação de remoção —
@@ -231,6 +237,14 @@ function renderRetomar(confirmando) {
     else dias.push({ data: l.data, lotes: [l] });
   }
 
+  // o dia mais recente abre; os anteriores ficam recolhidos, senão a lista
+  // cresce indefinidamente. A escolha do conferente vale enquanto a aba viver.
+  dias.forEach((d, i) => {
+    if (!(d.data in diasAbertos)) diasAbertos[d.data] = i === 0;
+    // o dia que está pedindo confirmação de remoção não pode estar escondido
+    if (confirmando && d.lotes.some((l) => l.chave === confirmando)) diasAbertos[d.data] = true;
+  });
+
   const linha = (l) => l.chave === confirmando ? `
     <div class="lote lote--confirma">
       <span>Remover a conferência de <b>${l.empresa}</b> em ${l.data}?
@@ -245,6 +259,8 @@ function renderRetomar(confirmando) {
       <span class="lote__id">${l.empresa}
         <span class="sub">${l.feitos} de ${l.total} conferidas</span></span>
       <span class="lote__acoes">
+        <button class="botao fantasma" data-acao="resumo" data-chave="${l.chave}"
+                title="Abrir o relatório de pareceres deste dia">Ver resumo</button>
         <button class="botao fantasma" data-acao="retomar" data-chave="${l.chave}">Retomar</button>
         <button class="lote__x" data-acao="perguntar" data-chave="${l.chave}"
                 title="Remover esta conferência" aria-label="Remover esta conferência">✕</button>
@@ -253,18 +269,32 @@ function renderRetomar(confirmando) {
 
   caixa.innerHTML =
     `<p class="sub" style="margin-bottom:.6rem">Conferências em andamento neste navegador:</p>` +
-    dias.map((d) => `
+    dias.map((d) => {
+      const aberto = diasAbertos[d.data];
+      const pend = d.lotes.filter((l) => l.feitos < l.total).length;
+      return `
       <div class="dia">
-        <div class="dia__cab">${d.data}
+        <button class="dia__cab" data-acao="alternar-dia" data-dia="${d.data}"
+                aria-expanded="${aberto}">
+          <span class="dia__seta">${aberto ? "▾" : "▸"}</span>${d.data}
           <span class="sub">${d.lotes.length === 1 ? "1 empresa"
-                                                   : d.lotes.length + " empresas"}</span></div>
-        ${d.lotes.map(linha).join("")}
-      </div>`).join("");
+                                                   : d.lotes.length + " empresas"}${
+            aberto ? "" : pend ? ` · ${pend} em aberto` : " · tudo conferido"}</span>
+        </button>
+        ${aberto ? d.lotes.map(linha).join("") : ""}
+      </div>`;
+    }).join("");
 
   caixa.querySelectorAll("button").forEach((b) => {
     b.onclick = () => {
       const { acao, chave } = b.dataset;
+      if (acao === "alternar-dia") {
+        diasAbertos[b.dataset.dia] = !diasAbertos[b.dataset.dia];
+        renderRetomar(confirmando);
+        return;
+      }
       if (acao === "retomar") carregar(chave);
+      else if (acao === "resumo") carregar(chave, "resumo");
       else if (acao === "perguntar") renderRetomar(chave);
       else if (acao === "cancelar") renderRetomar();
       else if (acao === "remover") {
