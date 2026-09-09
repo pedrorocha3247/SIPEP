@@ -37,11 +37,54 @@ const $ = (id) => document.getElementById(id);
 const moeda = (v) =>
   (v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-let estado = { dados: null, itens: [], pareceres: {}, i: 0 };
+let estado = { dados: null, itens: [], pareceres: {}, i: 0, mesclagem: null };
 
 /* ---------------------------------------------------------------- persistência */
+/**
+ * A chave é só a data do relatório. O SCK vai acrescentando solicitações ao
+ * longo do dia, então o relatório da tarde é o MESMO lote da manhã, com mais
+ * linhas — e não uma conferência nova.
+ */
 const chaveLote = (d) =>
-  `${CHAVE}.${(d.meta.dataInicio || "sem-data").replace(/\//g, "-")}.${d.validacao.qtdExtraida}`;
+  `${CHAVE}.${(d.meta.dataInicio || "sem-data").replace(/\//g, "-")}`;
+
+/** Campos cuja alteração invalida um parecer já dado. */
+const assinatura = (s) => [s.tipo, s.valor, s.favorecido, s.cpfCnpj, s.destinacao,
+                           s.poder, s.solicitante, s.competente].join("|");
+
+/**
+ * Junta o relatório recém-aberto com a conferência já gravada para aquela data.
+ * O relatório novo é a verdade: ele manda na lista. Os pareceres já dados são
+ * preservados, menos os de solicitações que mudaram — esses voltam a pendente,
+ * porque conferir R$ 10.000 não vale como parecer para R$ 15.000.
+ */
+function mesclar(anterior, novo) {
+  const antes = new Map((anterior.solicitacoes || []).map((s) => [s.sn, s]));
+  const pareceresAntigos = anterior.pareceres || {};
+  const pareceres = {};
+  const novas = [], alteradas = [];
+
+  for (const s of novo.solicitacoes) {
+    const anteriorS = antes.get(s.sn);
+    if (!anteriorS) { novas.push(s.sn); continue; }
+    const p = pareceresAntigos[s.sn];
+    if (!p) continue;
+    if (p.status && assinatura(anteriorS) !== assinatura(s)) {
+      // guarda o texto para ele reaproveitar, mas o status volta a pendente
+      pareceres[s.sn] = { status: "", parecer: p.parecer };
+      alteradas.push(s.sn);
+    } else {
+      pareceres[s.sn] = p;
+    }
+  }
+
+  const agora = new Set(novo.solicitacoes.map((s) => s.sn));
+  const sumiram = (anterior.solicitacoes || [])
+    .filter((s) => !agora.has(s.sn) && pareceresAntigos[s.sn]?.status)
+    .map((s) => s.sn);
+
+  return { pareceres, novas, alteradas, sumiram };
+}
 
 function salvar() {
   try {
@@ -63,6 +106,23 @@ function migrarChaves() {
       const nova = CHAVE + antiga.slice(CHAVE_ANTIGA.length);
       if (!localStorage.getItem(nova)) localStorage.setItem(nova, localStorage.getItem(antiga));
       localStorage.removeItem(antiga);
+    }
+    // chaves antigas traziam a quantidade no fim (…02-09-2026.94): agora a data basta
+    for (const chave of Object.keys(localStorage)) {
+      const m = chave.match(new RegExp(`^${CHAVE}\\.(\\d{2}-\\d{2}-\\d{4})\\.\\d+$`));
+      if (!m) continue;
+      const destino = `${CHAVE}.${m[1]}`;
+      const atual = localStorage.getItem(destino);
+      if (!atual) {
+        localStorage.setItem(destino, localStorage.getItem(chave));
+      } else {
+        // duas gravações do mesmo dia: fica a de lista maior, com os pareceres somados
+        const a = JSON.parse(atual), b = JSON.parse(localStorage.getItem(chave));
+        const base = (b.solicitacoes || []).length > (a.solicitacoes || []).length ? b : a;
+        base.pareceres = { ...(b.pareceres || {}), ...(a.pareceres || {}) };
+        localStorage.setItem(destino, JSON.stringify(base));
+      }
+      localStorage.removeItem(chave);
     }
     for (const chave of Object.keys(localStorage)) {
       if (!chave.startsWith(CHAVE + ".")) continue;
@@ -194,8 +254,17 @@ async function processar(arquivo) {
     const salvo = localStorage.getItem(chaveLote(dados));
     estado.dados = dados;
     estado.itens = ordenar(dados.solicitacoes);
-    estado.pareceres = salvo ? (JSON.parse(salvo).pareceres || {}) : {};
     estado.i = 0;
+
+    if (salvo) {
+      const r = mesclar(JSON.parse(salvo), dados);
+      estado.pareceres = r.pareceres;
+      estado.mesclagem = r;
+    } else {
+      estado.pareceres = {};
+      estado.mesclagem = null;
+    }
+    salvar();
     irPara("revisao");
     render();
   } catch (e) {
@@ -206,6 +275,23 @@ async function processar(arquivo) {
 /* -------------------------------------------------------------------- conferência */
 function render() {
   const { validacao } = estado.dados;
+  const m = estado.mesclagem;
+  $("aviso-mesclagem").innerHTML = !m || (!m.novas.length && !m.alteradas.length && !m.sumiram.length)
+    ? ""
+    : `<div class="alerta ok">
+        <b>Relatório atualizado.</b> Seus pareceres foram mantidos.
+        ${m.novas.length ? `${m.novas.length} solicitação(ões) nova(s).` : ""}
+        ${m.alteradas.length ? `${m.alteradas.length} mudou/mudaram desde a última conferência
+           e voltaram a pendente — o texto do parecer ficou guardado.` : ""}
+        ${m.sumiram.length ? `${m.sumiram.length} que você já tinha conferido saiu/saíram do
+           relatório: ${m.sumiram.join(", ")}.` : ""}
+        <button class="alerta__x" id="btn-fecha-mesclagem" title="Dispensar">✕</button>
+      </div>`;
+  if (m) {
+    const x = $("btn-fecha-mesclagem");
+    if (x) x.onclick = () => { estado.mesclagem = null; $("aviso-mesclagem").innerHTML = ""; };
+  }
+
   $("aviso-extracao").innerHTML = validacao.confere ? ""
     : `<div class="alerta erro"><b>Atenção:</b> o que extraí não bateu com os totais impressos
         (${validacao.qtdExtraida} × ${validacao.qtdRelatorio} solicitações,
