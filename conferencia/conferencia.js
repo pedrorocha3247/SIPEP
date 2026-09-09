@@ -194,10 +194,38 @@ const ordenar = (ss) =>
 
 const feitos = () => estado.itens.filter((s) => estado.pareceres[s.sn]?.status).length;
 
+/**
+ * Troca de tela e ajusta o "voltar" do cabeçalho.
+ *
+ * O voltar é de UM passo: do resumo ou da conferência volta-se para a tela do
+ * relatório (onde estão as conferências salvas) e só de lá se sai para o
+ * NOCTUS. Sair do módulo inteiro no meio de uma conferência era saída demais
+ * para um clique só.
+ */
 function irPara(tela) {
   for (const t of ["upload", "revisao", "resumo"])
     $("tela-" + t).classList.toggle("oculto", t !== tela);
+  telaAtual = tela;
+  const a = $("voltar-topo");
+  if (a) {
+    a.textContent = tela === "upload" ? "← Voltar ao NOCTUS" : "← Voltar ao relatório";
+    a.href = tela === "upload" ? "../#/" : "#";
+    a.title = tela === "upload" ? "" : "Voltar para a tela do relatório";
+  }
   window.scrollTo(0, 0);
+}
+
+let telaAtual = "upload";
+
+function ligarVoltar() {
+  const a = $("voltar-topo");
+  if (!a) return;
+  a.onclick = (e) => {
+    if (telaAtual === "upload") return;   // deixa o link levar ao NOCTUS
+    e.preventDefault();
+    irPara("upload");
+    renderRetomar();                      // os contadores mudaram desde que saiu daqui
+  };
 }
 
 /* ------------------------------------------------------------------------ upload */
@@ -789,6 +817,7 @@ async function gerarPlanilha() {
 
 /* ------------------------------------------------------------------------- início */
 migrarChaves();
+ligarVoltar();
 ligarUpload();
 ligarRevisao();
 ligarResumo();
