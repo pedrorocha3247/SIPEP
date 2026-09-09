@@ -26,6 +26,14 @@ a:hover{color:var(--color-blue-hover)}
 .topo h1{font-size:1rem;font-weight:700;margin:0;letter-spacing:-.01em}
 .topo h1 span{color:var(--color-text-muted);font-weight:500}
 .topo nav{display:flex;gap:1rem;font-size:.85rem;color:var(--color-text-secondary)}
+/* voltar: um alvo de clique de verdade, não um texto solto no canto */
+.voltar{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .85rem;
+  border:1px solid var(--color-border);border-radius:var(--radius-md);
+  background:var(--color-surface-raised);color:var(--color-text-secondary);
+  text-decoration:none;font-weight:600;white-space:nowrap;
+  transition:all var(--transition-fast)}
+.voltar:hover{color:var(--color-text);border-color:var(--color-green);
+  background:var(--color-green-dim);transform:translateX(-2px)}
 
 main{max-width:900px;margin:0 auto;padding:1.75rem 1.25rem 4rem}
 .cartao{background:var(--color-surface);border:1px solid var(--color-border);
