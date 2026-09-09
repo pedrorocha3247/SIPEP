@@ -41,12 +41,22 @@ let estado = { dados: null, itens: [], pareceres: {}, i: 0, mesclagem: null };
 
 /* ---------------------------------------------------------------- persistência */
 /**
- * A chave é só a data do relatório. O SCK vai acrescentando solicitações ao
- * longo do dia, então o relatório da tarde é o MESMO lote da manhã, com mais
- * linhas — e não uma conferência nova.
+ * A chave é a data do relatório mais a empresa. O SCK vai acrescentando
+ * solicitações ao longo do dia, então o relatório da tarde é o MESMO lote da
+ * manhã, com mais linhas — e não uma conferência nova. Mas cada empresa tem o
+ * seu relatório, então o mesmo dia pode ter vários lotes, um por empresa.
  */
+const codEmpresa = (meta) => {
+  const m = String(meta?.empresaCodigo || meta?.empresa || "").match(/^\s*(\d{1,4})/);
+  if (m) return m[1];
+  const nome = String(meta?.empresaNome || meta?.empresa || "").trim();
+  return nome ? nome.replace(/[^A-Za-z0-9]+/g, "-").slice(0, 24) : "sem-empresa";
+};
+const nomeEmpresa = (meta) =>
+  meta?.empresa || meta?.empresaNome || "Empresa não identificada";
+
 const chaveLote = (d) =>
-  `${CHAVE}.${(d.meta.dataInicio || "sem-data").replace(/\//g, "-")}`;
+  `${CHAVE}.${(d.meta.dataInicio || "sem-data").replace(/\//g, "-")}.e${codEmpresa(d.meta)}`;
 
 /** Campos cuja alteração invalida um parecer já dado. */
 const assinatura = (s) => [s.tipo, s.valor, s.favorecido, s.cpfCnpj, s.destinacao,
@@ -124,6 +134,15 @@ function migrarChaves() {
       }
       localStorage.removeItem(chave);
     }
+    // chaves só-data (…09-09-2026): agora cada empresa tem o seu lote
+    for (const chave of Object.keys(localStorage)) {
+      const m = chave.match(new RegExp(`^${CHAVE}\\.(\\d{2}-\\d{2}-\\d{4})$`));
+      if (!m) continue;
+      const v = JSON.parse(localStorage.getItem(chave));
+      const destino = `${chave}.e${codEmpresa(v.meta)}`;
+      if (!localStorage.getItem(destino)) localStorage.setItem(destino, localStorage.getItem(chave));
+      localStorage.removeItem(chave);
+    }
     for (const chave of Object.keys(localStorage)) {
       if (!chave.startsWith(CHAVE + ".")) continue;
       const v = JSON.parse(localStorage.getItem(chave));
@@ -143,11 +162,14 @@ function lotesSalvos() {
     if (!chave || !chave.startsWith(CHAVE + ".")) continue;
     try {
       const v = JSON.parse(localStorage.getItem(chave));
-      out.push({ chave, meta: v.meta, total: v.solicitacoes.length,
+      out.push({ chave, meta: v.meta, data: v.meta?.dataInicio || "sem data",
+                 empresa: nomeEmpresa(v.meta), total: v.solicitacoes.length,
                  feitos: Object.values(v.pareceres || {}).filter((p) => p.status).length });
     } catch (e) { /* entrada corrompida: ignora */ }
   }
-  return out.sort((a, b) => (b.meta?.dataInicio || "").localeCompare(a.meta?.dataInicio || ""));
+  const ord = (d) => (d || "").split("/").reverse().join("-");
+  return out.sort((a, b) => ord(b.data).localeCompare(ord(a.data)) ||
+                            a.empresa.localeCompare(b.empresa));
 }
 
 function carregar(chave) {
@@ -200,26 +222,43 @@ function renderRetomar(confirmando) {
   const salvos = lotesSalvos();
   if (!salvos.length) { caixa.classList.add("oculto"); caixa.innerHTML = ""; return; }
   caixa.classList.remove("oculto");
+
+  // agrupa por dia, com as empresas daquele dia embaixo
+  const dias = [];
+  for (const l of salvos) {
+    const ultimo = dias[dias.length - 1];
+    if (ultimo && ultimo.data === l.data) ultimo.lotes.push(l);
+    else dias.push({ data: l.data, lotes: [l] });
+  }
+
+  const linha = (l) => l.chave === confirmando ? `
+    <div class="lote lote--confirma">
+      <span>Remover a conferência de <b>${l.empresa}</b> em ${l.data}?
+        <span class="sub">${l.feitos ? `Os ${l.feitos} pareceres já dados serão perdidos.`
+                                     : "Nenhum parecer foi dado nela."}</span></span>
+      <span class="lote__acoes">
+        <button class="botao fantasma" data-acao="cancelar">Cancelar</button>
+        <button class="botao perigo" data-acao="remover" data-chave="${l.chave}">Remover</button>
+      </span>
+    </div>` : `
+    <div class="lote${l.feitos === l.total ? " lote--completa" : ""}">
+      <span class="lote__id">${l.empresa}
+        <span class="sub">${l.feitos} de ${l.total} conferidas</span></span>
+      <span class="lote__acoes">
+        <button class="botao fantasma" data-acao="retomar" data-chave="${l.chave}">Retomar</button>
+        <button class="lote__x" data-acao="perguntar" data-chave="${l.chave}"
+                title="Remover esta conferência" aria-label="Remover esta conferência">✕</button>
+      </span>
+    </div>`;
+
   caixa.innerHTML =
     `<p class="sub" style="margin-bottom:.6rem">Conferências em andamento neste navegador:</p>` +
-    salvos.map((l) => l.chave === confirmando ? `
-      <div class="lote lote--confirma">
-        <span>Remover a conferência de <b>${l.meta?.dataInicio || "sem data"}</b>?
-          <span class="sub">${l.feitos ? `Os ${l.feitos} pareceres já dados serão perdidos.`
-                                       : "Nenhum parecer foi dado nela."}</span></span>
-        <span class="lote__acoes">
-          <button class="botao fantasma" data-acao="cancelar">Cancelar</button>
-          <button class="botao perigo" data-acao="remover" data-chave="${l.chave}">Remover</button>
-        </span>
-      </div>` : `
-      <div class="lote${l.feitos === l.total ? " lote--completa" : ""}">
-        <span>${l.meta?.dataInicio || "sem data"}
-          <span class="sub">· ${l.feitos} de ${l.total} conferidas</span></span>
-        <span class="lote__acoes">
-          <button class="botao fantasma" data-acao="retomar" data-chave="${l.chave}">Retomar</button>
-          <button class="lote__x" data-acao="perguntar" data-chave="${l.chave}"
-                  title="Remover esta conferência" aria-label="Remover esta conferência">✕</button>
-        </span>
+    dias.map((d) => `
+      <div class="dia">
+        <div class="dia__cab">${d.data}
+          <span class="sub">${d.lotes.length === 1 ? "1 empresa"
+                                                   : d.lotes.length + " empresas"}</span></div>
+        ${d.lotes.map(linha).join("")}
       </div>`).join("");
 
   caixa.querySelectorAll("button").forEach((b) => {
@@ -367,7 +406,9 @@ let ultimoAberto = null;   // cartão de onde o conferidor foi aberto
 
 function mostrarResumo() {
   irPara("resumo");
-  $("res-data").textContent = "· " + (estado.dados.meta.dataInicio || "");
+  $("res-data").textContent =
+    "· " + (estado.dados.meta.dataInicio || "") +
+    (estado.dados.meta.empresa ? " · " + estado.dados.meta.empresa : "");
 
   const contagem = Object.fromEntries(STATUS.map((s) => [s.valor, 0]));
   contagem["Sem conferir"] = 0;
