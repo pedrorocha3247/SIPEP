@@ -254,6 +254,7 @@ const diasAbertos = {};
 function renderRetomar(confirmando) {
   const caixa = $("retomar");
   const salvos = lotesSalvos();
+  renderRodapeGeral();
   if (!salvos.length) { caixa.classList.add("oculto"); caixa.innerHTML = ""; return; }
   caixa.classList.remove("oculto");
 
@@ -844,9 +845,255 @@ async function gerarPlanilha() {
   }
 }
 
+/* ------------------------------------------------- planilha de todas as conferências */
+
+/**
+ * Lê do navegador todas as conferências guardadas, já achatadas em linhas.
+ *
+ * A planilha do dia responde "o que eu conferi neste relatório". Esta responde
+ * "o que passou por mim no período" — é ela que permite cruzar fornecedor,
+ * valor e nota entre dias diferentes, coisa que a conferência de um lote só,
+ * por definição, não enxerga.
+ */
+function consolidarLotes() {
+  const lotes = [];
+  for (let k = 0; k < localStorage.length; k++) {
+    const chave = localStorage.key(k);
+    if (!chave || !chave.startsWith(CHAVE + ".")) continue;
+    try {
+      const v = JSON.parse(localStorage.getItem(chave));
+      if (!Array.isArray(v.solicitacoes)) continue;
+      lotes.push({
+        data: v.meta?.dataInicio || "sem data",
+        empresa: nomeEmpresa(v.meta),
+        solicitacoes: v.solicitacoes,
+        pareceres: v.pareceres || {},
+      });
+    } catch (e) { /* entrada corrompida: fica de fora */ }
+  }
+  const ord = (d) => (d || "").split("/").reverse().join("-");
+  lotes.sort((a, b) => ord(a.data).localeCompare(ord(b.data)) ||
+                       a.empresa.localeCompare(b.empresa));
+
+  const linhas = [];
+  for (const l of lotes) {
+    for (const s of ordenar(l.solicitacoes)) {
+      const p = l.pareceres[s.sn] || {};
+      linhas.push({
+        data: l.data, empresa: l.empresa, sn: s.sn, tipo: s.tipo, valor: s.valor,
+        favorecido: s.favorecido, destinacao: s.destinacao,
+        apontamentos: apontamentosDe(s),
+        status: p.status || "Sem conferir", parecer: p.parecer || "",
+      });
+    }
+  }
+  return { lotes, linhas };
+}
+
+const COLUNAS_GERAL = [
+  { header: "Data", key: "data", width: 12 },
+  { header: "Empresa", key: "empresa", width: 34 },
+  { header: "S.N", key: "sn", width: 12 },
+  { header: "Forma de pagamento", key: "tipo", width: 20 },
+  { header: "Valor (R$)", key: "valor", width: 14 },
+  { header: "Favorecido", key: "favorecido", width: 38 },
+  { header: "Destinação", key: "destinacao", width: 54 },
+  { header: "Apontamentos", key: "apontamentos", width: 38 },
+  { header: "Status", key: "status", width: 24 },
+  { header: "Parecer", key: "parecer", width: 44 },
+];
+
+function abaGeral(wb, nome, linhas) {
+  const ws = wb.addWorksheet(nome, {
+    views: [{ showGridLines: false, state: "frozen", ySplit: 1 }],
+  });
+  ws.columns = COLUNAS_GERAL.map(({ header, key, width }) => ({ header, key, width }));
+  for (const l of linhas) ws.addRow(l);
+  estilizarCabecalho(ws.getRow(1));
+
+  ws.eachRow((linha, n) => {
+    if (n === 1) return;
+    linha.eachCell((c) => {
+      c.font = { name: "Calibri", size: 11 };
+      c.alignment = { vertical: "top", wrapText: false };
+      c.border = { bottom: { style: "hair", color: { argb: CINZA_LINHA } } };
+    });
+    linha.getCell("valor").numFmt = "#,##0.00";
+    linha.getCell("valor").alignment = { vertical: "top", horizontal: "right" };
+    for (const k of ["empresa", "favorecido", "destinacao", "apontamentos", "parecer"]) {
+      linha.getCell(k).alignment = { vertical: "top", wrapText: true };
+    }
+    const ap = linha.getCell("apontamentos");
+    if (ap.value) ap.font = { name: "Calibri", size: 11, bold: true, color: { argb: AMBAR } };
+    const st = linha.getCell("status");
+    st.font = { name: "Calibri", size: 11, bold: !!COR_STATUS[st.value],
+                color: { argb: COR_STATUS[st.value] || "FF808080" } };
+  });
+
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: COLUNAS_GERAL.length } };
+  return ws;
+}
+
+function abaResumoGeral(wb, lotes, linhas) {
+  const ws = wb.addWorksheet("RESUMO GERAL", { views: [{ showGridLines: false }] });
+  ws.columns = [{ width: 12 }, { width: 40 }, { width: 10 }, { width: 16 },
+                { width: 12 }, { width: 14 }, { width: 16 }];
+
+  const titulo = (l, texto, tamanho) => {
+    const c = ws.getCell(`A${l}`);
+    c.value = texto;
+    c.font = { name: "Calibri", size: tamanho, bold: true, color: { argb: AZUL } };
+  };
+  const cabecalho = (l, textos) => {
+    const linha = ws.getRow(l);
+    textos.forEach((t, i) => (linha.getCell(i + 1).value = t));
+    linha.height = 22;
+    for (let i = 1; i <= textos.length; i++) {
+      const c = linha.getCell(i);
+      c.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AZUL } };
+      c.alignment = { vertical: "middle", horizontal: i <= 2 ? "left" : "center", wrapText: true };
+    }
+  };
+
+  const datas = [...new Set(lotes.map((l) => l.data))];
+  const valorTotal = linhas.reduce((a, l) => a + (l.valor || 0), 0);
+  const apontadas = linhas.filter((l) => l.apontamentos).length;
+  const semConferir = linhas.filter((l) => l.status === "Sem conferir").length;
+
+  titulo(1, "CONFERÊNCIA DE PAGAMENTOS — CONSOLIDADO", 16);
+  ws.getCell("A2").value =
+    `${lotes.length} conferência(s) · ${datas.length} dia(s) · ${linhas.length} solicitações · ` +
+    `R$ ${moeda(valorTotal)}`;
+  ws.getCell("A2").font = { name: "Calibri", size: 11, color: { argb: "FF595959" } };
+  ws.getCell("A3").value = datas.length
+    ? `Período: ${datas[0]} a ${datas[datas.length - 1]} · gerado em ${new Date().toLocaleString("pt-BR")}`
+    : "";
+  ws.getCell("A3").font = { name: "Calibri", size: 10, color: { argb: "FF808080" } };
+  ws.getCell("A4").value = apontadas
+    ? `${apontadas} solicitação(ões) com apontamento automático — ver aba APONTAMENTOS`
+    : "Nenhum apontamento automático no período";
+  ws.getCell("A4").font = apontadas
+    ? { name: "Calibri", size: 11, bold: true, color: { argb: AMBAR } }
+    : { name: "Calibri", size: 10, color: { argb: "FF808080" } };
+  ws.getCell("A5").value = semConferir
+    ? `Atenção: ${semConferir} solicitação(ões) ainda sem parecer neste consolidado`
+    : "Todas as solicitações do período estão conferidas";
+  ws.getCell("A5").font = semConferir
+    ? { name: "Calibri", size: 11, bold: true, color: { argb: "FFB91C1C" } }
+    : { name: "Calibri", size: 10, color: { argb: "FF15803D" } };
+
+  titulo(7, "POR DIA E EMPRESA", 12);
+  cabecalho(8, ["Data", "Empresa", "Qtde", "Valor (R$)", "Conferidas", "Sem conferir", "Apontamentos"]);
+  let l = 9;
+  for (const lote of lotes) {
+    const doLote = linhas.filter((x) => x.data === lote.data && x.empresa === lote.empresa);
+    const linha = ws.getRow(l);
+    linha.getCell(1).value = lote.data;
+    linha.getCell(2).value = lote.empresa;
+    linha.getCell(3).value = doLote.length;
+    linha.getCell(4).value = doLote.reduce((a, x) => a + (x.valor || 0), 0);
+    linha.getCell(5).value = doLote.filter((x) => x.status !== "Sem conferir").length;
+    linha.getCell(6).value = doLote.filter((x) => x.status === "Sem conferir").length;
+    linha.getCell(7).value = doLote.filter((x) => x.apontamentos).length;
+    l++;
+  }
+  const total = ws.getRow(l);
+  total.getCell(1).value = "TOTAL";
+  for (const col of ["C", "D", "E", "F", "G"]) {
+    total.getCell(col).value = { formula: `SUM(${col}9:${col}${l - 1})` };
+  }
+  const fimLotes = l;
+
+  const inicioStatus = l + 3;
+  titulo(inicioStatus - 1, "POR STATUS NO PERÍODO", 12);
+  cabecalho(inicioStatus, ["Status", "", "Qtde", "Valor (R$)", "% do valor"]);
+  l = inicioStatus + 1;
+  const base = valorTotal || 1;
+  for (const nome of [...STATUS.map((x) => x.valor), "Sem conferir"]) {
+    const doStatus = linhas.filter((x) => x.status === nome);
+    if (!doStatus.length) continue;
+    const soma = doStatus.reduce((a, x) => a + (x.valor || 0), 0);
+    const linha = ws.getRow(l);
+    linha.getCell(1).value = nome;
+    linha.getCell(3).value = doStatus.length;
+    linha.getCell(4).value = soma;
+    linha.getCell(5).value = soma / base;
+    if (COR_STATUS[nome]) {
+      linha.getCell(1).font = { name: "Calibri", size: 11, bold: true, color: { argb: COR_STATUS[nome] } };
+    }
+    l++;
+  }
+
+  for (let n = 9; n < l; n++) {
+    const linha = ws.getRow(n);
+    linha.eachCell((c, i) => {
+      if (!c.font) c.font = { name: "Calibri", size: 11 };
+      c.border = { bottom: { style: "hair", color: { argb: CINZA_LINHA } } };
+      if (i >= 3) c.alignment = { horizontal: "center" };
+      if (i === 4) { c.numFmt = "#,##0.00"; c.alignment = { horizontal: "right" }; }
+    });
+    if (n >= inicioStatus + 1) linha.getCell(5).numFmt = "0.0%";
+  }
+  const lt = ws.getRow(fimLotes);
+  lt.eachCell((c) => {
+    c.font = { name: "Calibri", size: 11, bold: true };
+    c.border = { top: { style: "thin", color: { argb: AZUL } } };
+  });
+  lt.getCell(4).numFmt = "#,##0.00";
+  return ws;
+}
+
+/** Atualiza a linha do rodapé da tela do relatório. */
+function renderRodapeGeral() {
+  const caixa = $("rodape-upload");
+  if (!caixa) return;
+  const { lotes, linhas } = consolidarLotes();
+  if (!lotes.length) { caixa.classList.add("oculto"); return; }
+  caixa.classList.remove("oculto");
+  const dias = new Set(lotes.map((l) => l.data)).size;
+  $("geral-info").textContent =
+    `${lotes.length} conferência(s) em ${dias} dia(s) · ${linhas.length} solicitações`;
+}
+
+async function gerarPlanilhaGeral() {
+  const btn = $("btn-planilha-geral");
+  const rotulo = btn.textContent;
+  const aviso = (t, erro) => {
+    $("upload-msg").innerHTML = `<div class="alerta${erro ? " erro" : ""}">${t}</div>`;
+  };
+  btn.disabled = true; btn.textContent = "Gerando…";
+  try {
+    const { lotes, linhas } = consolidarLotes();
+    if (!linhas.length) throw new Error("não há conferência guardada neste navegador");
+    await carregarExcelJS();
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "NOCTUS — Conferência de Pagamentos";
+    wb.created = new Date();
+
+    abaResumoGeral(wb, lotes, linhas);
+    abaGeral(wb, "TODAS", linhas);
+    const apontadas = linhas.filter((l) => l.apontamentos);
+    if (apontadas.length) abaGeral(wb, "APONTAMENTOS", apontadas);
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const datas = [...new Set(lotes.map((l) => l.data))].map((d) => d.replace(/\//g, "-"));
+    const ref = datas.length > 1 ? `${datas[0]}_a_${datas[datas.length - 1]}` : datas[0];
+    baixar(new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }), `Conferencias_Consolidado_${ref}.xlsx`);
+    aviso("Planilha consolidada gerada.", false);
+  } catch (e) {
+    aviso(`Não consegui gerar a planilha consolidada: ${e.message}`, true);
+  } finally {
+    btn.disabled = false; btn.textContent = rotulo;
+  }
+}
+
 /* ------------------------------------------------------------------------- início */
 migrarChaves();
 ligarVoltar();
 ligarUpload();
+$("btn-planilha-geral").onclick = gerarPlanilhaGeral;
 ligarRevisao();
 ligarResumo();
