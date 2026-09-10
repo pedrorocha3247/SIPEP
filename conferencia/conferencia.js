@@ -459,6 +459,10 @@ function ligarRevisao() {
 }
 
 /* ------------------------------------------------------------------------- resumo */
+const APONTADAS = "@apontadas";   // valor de filtro que não colide com nome de forma de pagamento
+const temApontamento = (s) => (s.alertas || []).length > 0;
+const apontamentosDe = (s) => (s.alertas || []).join(" · ");
+
 let filtro = null;
 let ultimoAberto = null;   // cartão de onde o conferidor foi aberto
 
@@ -487,19 +491,24 @@ function mostrarResumo() {
     ? `<div class="alerta">${contagem["Sem conferir"]} solicitação(ões) ainda sem status.</div>`
     : `<div class="alerta ok">Todas as solicitações conferidas.</div>`;
 
+  const apontadas = estado.itens.filter(temApontamento).length;
   $("res-filtros").innerHTML =
     [`<span class="chip ${filtro ? "" : "on"}" data-t="">Todas</span>`]
       .concat(ORDEM.filter((t) => estado.itens.some((s) => s.tipo === t))
         .map((t) => `<span class="chip ${filtro === t ? "on" : ""}" data-t="${t}">${t}</span>`))
+      .concat(apontadas ? [`<span class="chip chip--apontada ${filtro === APONTADAS ? "on" : ""}"
+        data-t="${APONTADAS}" title="Solicitações que o sistema marcou"
+        >${apontadas} com apontamento</span>`] : [])
       .join("");
   $("res-filtros").querySelectorAll(".chip").forEach((c) => {
     c.onclick = () => { filtro = c.dataset.t || null; mostrarResumo(); };
   });
 
   const esc = (t) => String(t ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-  const visiveis = estado.itens.filter((s) => !filtro || s.tipo === filtro);
-  $("res-qtd").textContent =
-    `· ${visiveis.length}${filtro ? " em " + filtro : ""}`;
+  const visiveis = estado.itens.filter((s) =>
+    filtro === APONTADAS ? temApontamento(s) : (!filtro || s.tipo === filtro));
+  $("res-qtd").textContent = `· ${visiveis.length}` +
+    (filtro === APONTADAS ? " com apontamento" : filtro ? " em " + filtro : "");
   $("res-corpo").innerHTML = visiveis
     .map((s) => {
       const p = estado.pareceres[s.sn] || {};
@@ -516,6 +525,8 @@ function mostrarResumo() {
         </div>
         <div class="parecer__fav">${esc(s.favorecido)}</div>
         <div class="parecer__dest">${esc(s.destinacao)}</div>
+        ${temApontamento(s)
+          ? `<div class="parecer__apontamento">${esc(apontamentosDe(s))}</div>` : ""}
         ${p.parecer ? `<div class="parecer__texto">${esc(p.parecer)}</div>` : ""}
       </div>`;
     }).join("");
@@ -562,6 +573,7 @@ function ligarResumo() {
 
 /* ---------------------------------------------------------------------- planilha */
 const AZUL = "FF1F3864";        // cabeçalho
+const AMBAR = "FF9C6500";       // apontamento automático
 const CINZA_LINHA = "FFD9D9D9"; // divisórias
 const COR_STATUS = {
   "Aprovado": "FF15803D",
@@ -635,6 +647,7 @@ function abaSolicitacoes(wb, nome, itens, comTipo) {
     { header: "Valor (R$)", key: "valor" },
     { header: "Favorecido", key: "favorecido" },
     { header: "Destinação", key: "destinacao" },
+    { header: "Apontamentos", key: "apontamentos" },
     { header: "Status", key: "status" },
     { header: "Parecer", key: "parecer" },
   ];
@@ -644,6 +657,7 @@ function abaSolicitacoes(wb, nome, itens, comTipo) {
     ws.addRow({
       sn: s.sn, tipo: s.tipo, valor: s.valor,
       favorecido: s.favorecido, destinacao: s.destinacao,
+      apontamentos: apontamentosDe(s),
       status: statusNaPlanilha(s.sn), parecer: parecerDe(s.sn),
     });
   }
@@ -651,7 +665,8 @@ function abaSolicitacoes(wb, nome, itens, comTipo) {
   // largura pelo conteúdo; as colunas longas quebram linha e o Excel ajusta a altura
   const w = (k, min, max) => largura(itens.map((s) => ({
     sn: s.sn, tipo: s.tipo, valor: moeda(s.valor), favorecido: s.favorecido,
-    destinacao: s.destinacao, status: statusNaPlanilha(s.sn), parecer: parecerDe(s.sn),
+    destinacao: s.destinacao, apontamentos: apontamentosDe(s),
+    status: statusNaPlanilha(s.sn), parecer: parecerDe(s.sn),
   }[k])).concat(colunas.find((c) => c.key === k).header), min, max);
 
   ws.getColumn("sn").width = w("sn", 10, 14);
@@ -659,6 +674,7 @@ function abaSolicitacoes(wb, nome, itens, comTipo) {
   ws.getColumn("valor").width = 14;
   ws.getColumn("favorecido").width = w("favorecido", 22, 42);
   ws.getColumn("destinacao").width = 58;
+  ws.getColumn("apontamentos").width = 38;
   ws.getColumn("status").width = 27;
   ws.getColumn("parecer").width = 46;
 
@@ -673,9 +689,12 @@ function abaSolicitacoes(wb, nome, itens, comTipo) {
     });
     linha.getCell("valor").numFmt = "#,##0.00";
     linha.getCell("valor").alignment = { vertical: "top", horizontal: "right" };
-    for (const k of ["favorecido", "destinacao", "parecer"]) {
+    for (const k of ["favorecido", "destinacao", "apontamentos", "parecer"]) {
       linha.getCell(k).alignment = { vertical: "top", wrapText: true };
     }
+    // o apontamento é do sistema, não do conferente: fica marcado, não escondido
+    const ap = linha.getCell("apontamentos");
+    if (ap.value) ap.font = { name: "Calibri", size: 11, bold: true, color: { argb: AMBAR } };
     const st = linha.getCell("status");
     st.font = { name: "Calibri", size: 11, bold: !!COR_STATUS[st.value],
                 color: { argb: COR_STATUS[st.value] || "FF808080" } };
@@ -714,6 +733,16 @@ function abaResumo(wb) {
   ws.getCell("A2").font = { name: "Calibri", size: 11, color: { argb: "FF595959" } };
   ws.getCell("A3").value = estado.dados.meta.empresa || "";
   ws.getCell("A3").font = { name: "Calibri", size: 10, color: { argb: "FF808080" } };
+
+  // quantas solicitações o próprio sistema marcou — evidência de que a
+  // verificação automática rodou, e quanto ela achou
+  const comApontamento = estado.itens.filter((s) => (s.alertas || []).length).length;
+  ws.getCell("A4").value = comApontamento
+    ? `${comApontamento} solicitação(ões) com apontamento automático — ver coluna "Apontamentos"`
+    : "Nenhum apontamento automático neste lote";
+  ws.getCell("A4").font = comApontamento
+    ? { name: "Calibri", size: 11, bold: true, color: { argb: AMBAR } }
+    : { name: "Calibri", size: 10, color: { argb: "FF808080" } };
 
   // ---- por forma de pagamento
   titulo(5, "POR FORMA DE PAGAMENTO", 12);
