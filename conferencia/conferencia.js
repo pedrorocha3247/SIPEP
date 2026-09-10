@@ -1048,19 +1048,17 @@ function abaResumoGeral(wb, lotes, linhas) {
 function renderRodapeGeral() {
   const caixa = $("rodape-upload");
   if (!caixa) return;
-  const { lotes, linhas } = consolidarLotes();
-  if (!lotes.length) { caixa.classList.add("oculto"); return; }
-  caixa.classList.remove("oculto");
-  const dias = new Set(lotes.map((l) => l.data)).size;
-  $("geral-info").textContent =
-    `${lotes.length} conferência(s) em ${dias} dia(s) · ${linhas.length} solicitações`;
+  const { lotes } = consolidarLotes();
+  caixa.classList.toggle("oculto", !lotes.length);
 }
 
 async function gerarPlanilhaGeral() {
   const btn = $("btn-planilha-geral");
   const rotulo = btn.textContent;
   const aviso = (t, erro) => {
-    $("upload-msg").innerHTML = `<div class="alerta${erro ? " erro" : ""}">${t}</div>`;
+    $("upload-msg").innerHTML = `<div class="alerta${erro ? " erro" : ""}">${t}
+      <button class="alerta__x" id="btn-fecha-planilha-geral" title="Dispensar">✕</button></div>`;
+    $("btn-fecha-planilha-geral").onclick = () => { $("upload-msg").innerHTML = ""; };
   };
   btn.disabled = true; btn.textContent = "Gerando…";
   try {
