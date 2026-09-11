@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conferência de Pagamentos — NOCTUS</title>
+<meta name="description" content="Módulo de conferência do relatório de Solicitações de Pagamentos por Débito em Conta Corrente.">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./conferencia.css">
+</head>
+<body>
+
+<header class="topo">
+  <h1>Conferência de Pagamentos <span>· NOCTUS</span></h1>
+  <nav>
+    <a class="voltar" id="voltar-topo" href="../#/">Voltar</a>
+  </nav>
+</header>
+
+<main>
+
+  <!-- 1. upload -->
+  <section id="tela-upload" class="cartao">
+    <h2>Novo relatório</h2>
+    <p class="sub" style="margin-top:-.5rem;margin-bottom:.5rem">
+      Relatório “Solicitações de Pagamentos por Débito em Conta Corrente” (SCK), em PDF.
+      O arquivo é lido aqui no seu navegador — nada é enviado para servidor nenhum.
+    </p>
+    <p class="sub" id="otn-linha" style="margin-bottom:1rem"></p>
+    <div class="solta" id="solta">
+      <strong>Clique para escolher o PDF</strong>
+      <span>ou arraste o arquivo para cá</span>
+      <input type="file" id="arquivo" accept="application/pdf" hidden>
+    </div>
+    <div id="upload-msg"></div>
+    <div id="retomar" class="oculto" style="margin-top:1rem"></div>
+    <div id="rodape-upload" class="rodape-upload oculto">
+      <button class="botao fantasma" id="btn-planilha-geral"
+              title="Uma planilha só, com todas as conferências guardadas neste navegador">
+        Relatório geral</button>
+    </div>
+  </section>
+
+  <!-- 2. conferência -->
+  <section id="tela-revisao" class="oculto">
+    <div id="aviso-mesclagem"></div>
+    <div id="aviso-extracao"></div>
+    <div class="cartao">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap">
+        <h2 style="margin:0" id="rev-tipo">—</h2>
+        <span class="sub" id="rev-contador">—</span>
+      </div>
+      <div class="progresso"><i id="rev-barra" style="width:0%"></i></div>
+
+      <div id="rev-alertas"></div>
+
+      <div class="grade">
+        <div class="campo"><label>S.N</label><div class="dado" id="c-sn">—</div></div>
+        <div class="campo"><label>Valor</label><div class="dado numero" id="c-valor">—</div></div>
+        <div class="campo"><label>Poder</label><div class="dado" id="c-poder">—</div></div>
+        <div class="campo"><label>Solicitante</label><div class="dado" id="c-solicitante">—</div></div>
+        <div class="campo"><label>Competente</label><div class="dado" id="c-competente">—</div></div>
+        <div class="campo largo"><label>Favorecido · CPF / CNPJ</label><div class="dado" id="c-favorecido">—</div></div>
+        <div class="campo largo"><label>Destinação</label><div class="dado" id="c-destinacao">—</div></div>
+      </div>
+
+      <label class="campo" style="display:block"><span style="display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-muted);margin-bottom:.4rem;font-weight:600">Status</span></label>
+      <div class="status" id="rev-status">
+        <input type="radio" name="status" id="st-aprovado" value="Aprovado">
+        <label for="st-aprovado">Aprovado <b>1</b></label>
+        <input type="radio" name="status" id="st-aguardando" value="Aguardando esclarecimentos">
+        <label for="st-aguardando">Aguardando esclarecimentos <b>2</b></label>
+        <input type="radio" name="status" id="st-recusado" value="Recusado">
+        <label for="st-recusado">Recusado <b>3</b></label>
+      </div>
+
+      <div class="campo">
+        <label for="rev-parecer">Parecer</label>
+        <textarea id="rev-parecer" placeholder="Seu parecer sobre esta solicitação"></textarea>
+      </div>
+
+      <div class="acoes">
+        <div>
+          <button class="botao fantasma" id="btn-anterior">Anterior</button>
+          <button class="botao fantasma" id="btn-pular">Pular</button>
+        </div>
+        <div>
+          <button class="botao fantasma" id="btn-resumo">Ver resumo</button>
+          <button class="botao primario" id="btn-proxima">Salvar e próxima</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. resumo -->
+  <section id="tela-resumo" class="oculto">
+    <div class="cartao">
+      <h2>Resumo da conferência <span class="sub" id="res-data"></span></h2>
+      <div class="resumo-totais" id="res-totais"></div>
+      <div class="resumo-status" id="res-status"></div>
+      <div id="res-pendencia"></div>
+      <div class="acoes">
+        <div>
+          <button class="botao fantasma" id="btn-voltar">Continuar conferindo</button>
+          <button class="botao fantasma" id="btn-imprimir">Imprimir</button>
+        </div>
+        <div>
+          <button class="botao primario" id="btn-planilha">Gerar planilha</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="cartao">
+      <div class="cabecalho-recolhivel">
+        <h2>Pareceres emitidos <span class="sub" id="res-qtd"></span></h2>
+        <button class="botao fantasma" id="btn-lista" aria-expanded="false"
+                aria-controls="res-lista">Mostrar</button>
+      </div>
+      <div id="res-lista" hidden>
+        <div class="lista-tipos" id="res-filtros"></div>
+        <div id="res-corpo"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script type="module" src="./conferencia.js"></script>
+</body>
+</html>
